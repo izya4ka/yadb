@@ -18,7 +18,7 @@ impl FileLogger {
 }
 
 impl Logger for FileLogger {
-    fn log(&mut self, level: LogLevel, msg: String) {
+    fn log(&self, level: LogLevel, msg: String) {
         if let Some(mut file) = self.file.as_ref() {
             let mut str = String::default();
 

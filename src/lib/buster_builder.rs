@@ -1,11 +1,8 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
 use thiserror::Error;
-use url::Url;
+use url::{ParseError, Url};
 
 use crate::{
     ProgressHandler,
@@ -19,8 +16,8 @@ const DEFAULT_RECURSIVE_MODE: bool = false;
 
 #[derive(Error, Debug, Clone)]
 pub enum BuilderError {
-    #[error("Can't parse host from: {0}")]
-    HostParseError(String),
+    #[error("Can't parse host: {0}")]
+    HostParseError(#[from] ParseError),
 
     #[error("Host not specified")]
     HostNotSpecified,
@@ -52,7 +49,7 @@ where
     error: Option<BuilderError>,
     total_progress_handler: Option<Arc<P>>,
     current_progress_handler: Option<Arc<P>>,
-    logger: Option<Arc<Mutex<BusterLogger>>>,
+    logger: Option<Arc<BusterLogger>>,
 }
 
 impl<P> BusterBuilder<P>
@@ -98,15 +95,18 @@ where
         let path: PathBuf = PathBuf::from(wordlist_path);
 
         if !path.exists() {
-            self.error = Some(BuilderError::FileNotFound(wordlist_path.to_string()))
+            self.error = Some(BuilderError::FileNotFound(wordlist_path.to_string()));
+            return self;
         }
 
         if !path.is_file() {
-            self.error = Some(BuilderError::NotAFile(wordlist_path.to_string()))
+            self.error = Some(BuilderError::NotAFile(wordlist_path.to_string()));
+            return self;
         }
 
         if path.to_str().is_none() {
             self.error = Some(BuilderError::InvalidFilePath);
+            return self;
         }
 
         self.wordlist = Some(path);
@@ -123,7 +123,7 @@ where
         self
     }
 
-    pub fn with_logger(mut self, logger: Arc<Mutex<BusterLogger>>) -> Self {
+    pub fn with_logger(mut self, logger: Arc<BusterLogger>) -> Self {
         self.logger = Some(logger);
         self
     }
@@ -135,8 +135,8 @@ where
 
         let parsed_uri = match Url::parse(uri) {
             Ok(url) => url,
-            Err(_) => {
-                self.error = Some(BuilderError::HostParseError(uri.to_string()));
+            Err(err) => {
+                self.error = Some(BuilderError::HostParseError(err));
                 return self;
             }
         };
@@ -171,9 +171,9 @@ where
             None => Arc::new(P::default()),
         };
 
-        let logger: Arc<Mutex<BusterLogger>> = match self.logger.as_ref() {
+        let logger: Arc<BusterLogger> = match self.logger.as_ref() {
             Some(log) => Arc::clone(log),
-            None => Arc::new(Mutex::new(BusterLogger::NullLogger(NullLogger::default()))),
+            None => Arc::new(BusterLogger::NullLogger(NullLogger::default())),
         };
 
         let wordlist = self

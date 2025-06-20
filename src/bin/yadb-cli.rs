@@ -95,10 +95,13 @@ fn main() {
         .wordlist(&args.wordlist)
         .total_progress_handler(Arc::new(total_progress_handler))
         .current_progress_handler(Arc::new(current_progress_handler))
-        .with_logger(Arc::new(Mutex::new(logger)))
+        .with_logger(Arc::new(logger))
         .build();
 
-    if let Ok(buster) = buster {
-        let _ = buster.run();
+    match buster {
+        Ok(buster) => {
+            let _ = buster.run();
+        }
+        Err(err) => println!("Error: {err}"),
     }
 }

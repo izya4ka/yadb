@@ -1,7 +1,7 @@
 use console::style;
 use reqwest::blocking::Client;
 use std::io::{BufRead, BufReader};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::{fs::File, path::PathBuf};
 use thiserror::Error;
@@ -26,7 +26,7 @@ where
     uri: Url,
     total_progress_handler: Arc<T>,
     current_progress_handler: Arc<T>,
-    logger: Arc<Mutex<BusterLogger>>,
+    logger: Arc<BusterLogger>,
 }
 
 impl<Progress> Buster<Progress>
@@ -40,7 +40,7 @@ where
         uri: Url,
         total_progress_handler: Arc<Progress>,
         current_progress_handler: Arc<Progress>,
-        logger: Arc<Mutex<BusterLogger>>,
+        logger: Arc<BusterLogger>,
     ) -> Buster<Progress> {
         Buster {
             threads,
@@ -100,10 +100,7 @@ where
 
                             if status != 404 {
                                 cpb.println(format!("GET {url} -> {}", style(status).cyan()));
-                                logger
-                                    .lock()
-                                    .unwrap()
-                                    .log(LogLevel::INFO, format!("{url} -> {status}"));
+                                logger.log(LogLevel::INFO, format!("{url} -> {status}"));
                             } else {
                                 cpb.set_message(format!("GET {url} -> {}", style(status).red()));
                             }
@@ -124,16 +121,10 @@ where
 
         for thread in threads {
             match thread.join() {
-                Ok(Err(err)) => self
-                    .logger
-                    .lock()
-                    .unwrap()
-                    .log(LogLevel::ERROR, err.to_string()),
+                Ok(Err(err)) => self.logger.log(LogLevel::ERROR, err.to_string()),
                 Ok(Ok(())) => (),
                 Err(err) => self
                     .logger
-                    .lock()
-                    .unwrap()
                     .log(LogLevel::CRITICAL, format!("Panic in thread: {err:?}")),
             }
         }
