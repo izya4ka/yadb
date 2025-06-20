@@ -7,7 +7,15 @@ use clap::Parser;
 use console::style;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use yadb::{
-    lib::{buster_builder::BusterBuilder, logger::{logger::FileLogger, traits::{BusterLogger, NullLogger}}, util}, CliProgress
+    CliProgress,
+    lib::{
+        buster_builder::BusterBuilder,
+        logger::{
+            file_logger::FileLogger,
+            traits::{BusterLogger, NullLogger},
+        },
+        util,
+    },
 };
 
 #[derive(Parser)]
@@ -70,7 +78,7 @@ fn main() {
 
     let logger = if let Some(output) = args.output {
         match FileLogger::new(output) {
-            Ok(log) => BusterLogger::FileLogger(log),
+            Ok(log) => BusterLogger::FileLogger(Mutex::new(log)),
             Err(err) => {
                 println!("Error: {err}");
                 return;

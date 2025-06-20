@@ -1,4 +1,6 @@
-use crate::lib::logger::logger::FileLogger;
+use std::sync::Mutex;
+
+use crate::lib::logger::file_logger::FileLogger;
 
 pub enum LogLevel {
     INFO,
@@ -9,7 +11,7 @@ pub enum LogLevel {
 
 pub enum BusterLogger {
     NullLogger(NullLogger),
-    FileLogger(FileLogger)
+    FileLogger(Mutex<FileLogger>),
 }
 
 pub trait Logger: Send + Sync + 'static {
@@ -26,7 +28,7 @@ impl BusterLogger {
     pub fn log(&mut self, level: LogLevel, msg: String) {
         match self {
             BusterLogger::NullLogger(logger) => logger.log(level, msg),
-            BusterLogger::FileLogger(logger) => logger.log(level, msg)
+            BusterLogger::FileLogger(logger) => logger.get_mut().unwrap().log(level, msg),
         }
     }
 }

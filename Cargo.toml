@@ -1,7 +1,7 @@
 [package]
 name = "yadb"
 description = "Yet Another Directory Buster"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 readme = "README.md"
 repository = "https://github.com/izya4ka/yadb"
@@ -12,10 +12,8 @@ default-run = "yadb-cli"
 [dependencies]
 clap = { version = "4.5.39", features = ["derive"] }
 indicatif = "0.17.11"
-indicatif-log-bridge = "0.2.3"
 reqwest = { version = "0.12.18", features = ["blocking"] }
 thiserror = "2.0.12"
-env_logger = "0.11"
 console = "0.15.11"
 url = "2.5.4"
 anyhow = "1.0.98"

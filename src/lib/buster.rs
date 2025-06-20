@@ -8,7 +8,7 @@ use thiserror::Error;
 use url::Url;
 
 use crate::ProgressHandler;
-use crate::lib::logger::traits::{BusterLogger, LogLevel, Logger};
+use crate::lib::logger::traits::{BusterLogger, LogLevel};
 
 #[derive(Error, Debug, Clone)]
 pub enum BusterError {

@@ -8,7 +8,8 @@ use thiserror::Error;
 use url::Url;
 
 use crate::{
-    lib::logger::traits::{BusterLogger, Logger, NullLogger}, ProgressHandler
+    ProgressHandler,
+    lib::logger::traits::{BusterLogger, NullLogger},
 };
 
 use super::buster::Buster;
