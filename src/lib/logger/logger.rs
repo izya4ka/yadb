@@ -1,10 +1,7 @@
 use super::traits::LogLevel;
 use anyhow::Result;
 use chrono::Local;
-use std::{
-    fs::File,
-    io::Write,
-};
+use std::{fs::File, io::Write};
 
 use crate::lib::logger::traits::Logger;
 
@@ -41,9 +38,3 @@ impl Logger for FileLogger {
         }
     }
 }
-
-// impl Default for FileLogger {
-//     fn default() -> Self {
-//         Self { file: None }
-//     }
-// }
