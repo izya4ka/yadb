@@ -1,5 +1,3 @@
-use std::io::Write;
-
 pub fn print_logo() {
     println!(
         "

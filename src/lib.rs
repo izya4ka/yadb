@@ -3,8 +3,8 @@ use indicatif::ProgressBar;
 pub mod lib {
     pub mod buster;
     pub mod buster_builder;
-    pub mod util;
     pub mod logger;
+    pub mod util;
 }
 
 pub trait ProgressHandler: Send + Sync {

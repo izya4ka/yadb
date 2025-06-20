@@ -4,12 +4,11 @@ use chrono::Local;
 use std::{
     fs::File,
     io::Write,
-    path::{Path, PathBuf},
-    time::SystemTime,
 };
 
 use crate::lib::logger::traits::Logger;
 
+#[derive(Default)]
 pub struct FileLogger {
     file: Option<File>,
 }
@@ -43,8 +42,8 @@ impl Logger for FileLogger {
     }
 }
 
-impl Default for FileLogger {
-    fn default() -> Self {
-        Self {file: None}
-    }
-}
+// impl Default for FileLogger {
+//     fn default() -> Self {
+//         Self { file: None }
+//     }
+// }

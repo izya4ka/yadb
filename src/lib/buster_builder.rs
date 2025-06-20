@@ -1,10 +1,16 @@
-use std::{path::PathBuf, sync::{Arc, Mutex}};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use anyhow::Result;
 use thiserror::Error;
 use url::Url;
 
-use crate::{lib::logger::traits::{Logger, NullLogger}, ProgressHandler};
+use crate::{
+    ProgressHandler,
+    lib::logger::traits::{Logger, NullLogger},
+};
 
 use super::buster::Buster;
 
@@ -35,7 +41,10 @@ pub enum BuilderError {
     NotAFile(String),
 }
 
-pub struct BusterBuilder<P> where P: ProgressHandler + Send + Sync + Default {
+pub struct BusterBuilder<P>
+where
+    P: ProgressHandler + Send + Sync + Default,
+{
     threads: Option<usize>,
     recursive: Option<bool>,
     wordlist: Option<PathBuf>,
@@ -46,7 +55,10 @@ pub struct BusterBuilder<P> where P: ProgressHandler + Send + Sync + Default {
     logger: Option<Arc<Mutex<dyn Logger>>>,
 }
 
-impl<P> BusterBuilder<P> where P: ProgressHandler + Sync + Send + Default {
+impl<P> BusterBuilder<P>
+where
+    P: ProgressHandler + Sync + Send + Default,
+{
     pub fn new() -> Self {
         BusterBuilder {
             threads: None,
@@ -145,14 +157,9 @@ impl<P> BusterBuilder<P> where P: ProgressHandler + Sync + Send + Default {
             .ok_or(BuilderError::HostNotSpecified)?
             .to_owned();
 
+        let threads = self.threads.unwrap_or(DEFAULT_THREADS_NUMBER);
 
-        let threads = self.threads.unwrap_or_else(|| {
-            DEFAULT_THREADS_NUMBER
-        });
-
-        let recursive = self.recursive.unwrap_or_else(|| {
-            DEFAULT_RECURSIVE_MODE
-        });
+        let recursive = self.recursive.unwrap_or(DEFAULT_RECURSIVE_MODE);
 
         let total_progress_handler: Arc<P> = match self.total_progress_handler.as_ref() {
             Some(tpg) => Arc::clone(tpg),

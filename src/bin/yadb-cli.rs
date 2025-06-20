@@ -2,11 +2,10 @@ use std::{fmt::Write, sync::{Arc, Mutex}};
 
 use clap::Parser;
 use console::style;
-use env_logger::Logger;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use yadb::{
     lib::{
-        buster::Buster, buster_builder::{BuilderError, BusterBuilder}, logger::{logger::FileLogger, traits::NullLogger}, util
+        buster::Buster, buster_builder::{BuilderError, BusterBuilder}, logger::logger::FileLogger, util
     }, CliProgress
 };
 
@@ -70,14 +69,13 @@ fn main() {
 
     let logger = match args.output {
         Some(output) => {
-            let log = match FileLogger::new(output) {
+            match FileLogger::new(output) {
                 Ok(log) => log,
                 Err(err) => {
                     println!("Failed to init logger: {err}");
                     FileLogger::default()
                 }
-            };
-            log
+            }
         }
         None => FileLogger::default()
     };

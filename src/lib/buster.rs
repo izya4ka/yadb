@@ -80,8 +80,8 @@ where
             let url = self.uri.clone();
 
             let logger = self.logger.clone();
-            
-            let threads_num = self.threads; 
+
+            let threads_num = self.threads;
 
             threads.push(thread::spawn(move || {
                 let words = words.clone();
@@ -100,7 +100,10 @@ where
 
                             if status != 404 {
                                 cpb.println(format!("GET {url} -> {}", style(status).cyan()));
-                                logger.lock().unwrap().log(LogLevel::INFO, format!("{url} -> {status}"));
+                                logger
+                                    .lock()
+                                    .unwrap()
+                                    .log(LogLevel::INFO, format!("{url} -> {status}"));
                             } else {
                                 cpb.set_message(format!("GET {url} -> {}", style(status).red()));
                             }
@@ -121,9 +124,17 @@ where
 
         for thread in threads {
             match thread.join() {
-                Ok(Err(err)) => self.logger.lock().unwrap().log(LogLevel::ERROR, err.to_string()),
+                Ok(Err(err)) => self
+                    .logger
+                    .lock()
+                    .unwrap()
+                    .log(LogLevel::ERROR, err.to_string()),
                 Ok(Ok(())) => (),
-                Err(err) => self.logger.lock().unwrap().log(LogLevel::CRITICAL,format!("Panic in thread: {err:?}")),
+                Err(err) => self
+                    .logger
+                    .lock()
+                    .unwrap()
+                    .log(LogLevel::CRITICAL, format!("Panic in thread: {err:?}")),
             }
         }
 
