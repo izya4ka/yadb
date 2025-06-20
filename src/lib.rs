@@ -4,6 +4,7 @@ pub mod lib {
     pub mod buster;
     pub mod buster_builder;
     pub mod util;
+    pub mod logger;
 }
 
 pub trait ProgressHandler: Send + Sync {

@@ -1,17 +1,13 @@
-use std::{fmt::Write, sync::Arc};
+use std::{fmt::Write, sync::{Arc, Mutex}};
 
 use clap::Parser;
 use console::style;
-use flexi_logger::{FileSpec, Logger};
+use env_logger::Logger;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
-use log::error;
 use yadb::{
-    CliProgress,
     lib::{
-        buster::Buster,
-        buster_builder::{BuilderError, BusterBuilder},
-        util,
-    },
+        buster::Buster, buster_builder::{BuilderError, BusterBuilder}, logger::{logger::FileLogger, traits::NullLogger}, util
+    }, CliProgress
 };
 
 #[derive(Parser)]
@@ -52,21 +48,6 @@ fn main() {
         println!("Output: {}\n", style(output.to_string()).cyan());
     }
 
-    let mut logger: Logger = Logger::try_with_str("info")
-        .unwrap()
-        .format(util::log_format);
-
-    if let Some(path) = args.output
-        && let Ok(filespec) = FileSpec::try_from(path)
-    {
-        logger = logger.log_to_file(filespec);
-    }
-
-    let logger = logger.start();
-    if let Err(err) = logger {
-        error!("Failed to init logger: {err}")
-    }
-
     let m = MultiProgress::new();
 
     let cpb = m.add(ProgressBar::no_length());
@@ -84,8 +65,22 @@ fn main() {
         .progress_chars("#>-"),
     );
 
-    let total_progress_handler: CliProgress = CliProgress { pb: tpb };
+    let total_progress_handler = CliProgress { pb: tpb };
     let current_progress_handler = CliProgress { pb: cpb };
+
+    let logger = match args.output {
+        Some(output) => {
+            let log = match FileLogger::new(output) {
+                Ok(log) => log,
+                Err(err) => {
+                    println!("Failed to init logger: {err}");
+                    FileLogger::default()
+                }
+            };
+            log
+        }
+        None => FileLogger::default()
+    };
 
     let builder: BusterBuilder<CliProgress> = BusterBuilder::new();
     let buster: Result<Buster<CliProgress>, BuilderError> = builder
@@ -95,6 +90,7 @@ fn main() {
         .wordlist(&args.wordlist)
         .total_progress_handler(Arc::new(total_progress_handler))
         .current_progress_handler(Arc::new(current_progress_handler))
+        .with_logger(Arc::new(Mutex::new(logger)))
         .build();
 
     if let Ok(buster) = buster {

@@ -1,11 +1,10 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::{Arc, Mutex}};
 
 use anyhow::Result;
-use log::info;
 use thiserror::Error;
 use url::Url;
 
-use crate::ProgressHandler;
+use crate::{lib::logger::traits::{Logger, NullLogger}, ProgressHandler};
 
 use super::buster::Buster;
 
@@ -36,17 +35,18 @@ pub enum BuilderError {
     NotAFile(String),
 }
 
-pub struct BusterBuilder<T: ProgressHandler> {
+pub struct BusterBuilder<P> where P: ProgressHandler + Send + Sync + Default {
     threads: Option<usize>,
     recursive: Option<bool>,
     wordlist: Option<PathBuf>,
     uri: Option<Url>,
     error: Option<BuilderError>,
-    total_progress_handler: Option<Arc<T>>,
-    current_progress_handler: Option<Arc<T>>,
+    total_progress_handler: Option<Arc<P>>,
+    current_progress_handler: Option<Arc<P>>,
+    logger: Option<Arc<Mutex<dyn Logger>>>,
 }
 
-impl<T: ProgressHandler + Default> BusterBuilder<T> {
+impl<P> BusterBuilder<P> where P: ProgressHandler + Sync + Send + Default {
     pub fn new() -> Self {
         BusterBuilder {
             threads: None,
@@ -56,6 +56,7 @@ impl<T: ProgressHandler + Default> BusterBuilder<T> {
             error: None,
             total_progress_handler: None,
             current_progress_handler: None,
+            logger: None,
         }
     }
 
@@ -100,13 +101,18 @@ impl<T: ProgressHandler + Default> BusterBuilder<T> {
         self
     }
 
-    pub fn total_progress_handler(mut self, tpg: Arc<T>) -> Self {
+    pub fn total_progress_handler(mut self, tpg: Arc<P>) -> Self {
         self.total_progress_handler = Some(tpg);
         self
     }
 
-    pub fn current_progress_handler(mut self, cpg: Arc<T>) -> Self {
+    pub fn current_progress_handler(mut self, cpg: Arc<P>) -> Self {
         self.current_progress_handler = Some(cpg);
+        self
+    }
+
+    pub fn with_logger(mut self, logger: Arc<Mutex<dyn Logger>>) -> Self {
+        self.logger = Some(logger);
         self
     }
 
@@ -128,7 +134,7 @@ impl<T: ProgressHandler + Default> BusterBuilder<T> {
         self
     }
 
-    pub fn build(&self) -> Result<Buster<T>, BuilderError> {
+    pub fn build(&self) -> Result<Buster<P>, BuilderError> {
         if let Some(err) = &self.error {
             return Err(err.clone());
         }
@@ -139,26 +145,28 @@ impl<T: ProgressHandler + Default> BusterBuilder<T> {
             .ok_or(BuilderError::HostNotSpecified)?
             .to_owned();
 
-        info!("Host: {uri}");
 
         let threads = self.threads.unwrap_or_else(|| {
-            info!("Using default number of threads: {DEFAULT_THREADS_NUMBER}");
             DEFAULT_THREADS_NUMBER
         });
 
         let recursive = self.recursive.unwrap_or_else(|| {
-            info!("Using default recursive mode: {DEFAULT_RECURSIVE_MODE}");
             DEFAULT_RECURSIVE_MODE
         });
 
-        let total_progress_handler: Arc<T> = match self.total_progress_handler.as_ref() {
-            Some(tpg) => tpg.to_owned(),
-            None => Arc::new(T::default()),
+        let total_progress_handler: Arc<P> = match self.total_progress_handler.as_ref() {
+            Some(tpg) => Arc::clone(tpg),
+            None => Arc::new(P::default()),
         };
 
-        let current_progress_handler: Arc<T> = match self.current_progress_handler.as_ref() {
-            Some(tpg) => tpg.to_owned(),
-            None => Arc::new(T::default()),
+        let current_progress_handler: Arc<P> = match self.current_progress_handler.as_ref() {
+            Some(cpg) => Arc::clone(cpg),
+            None => Arc::new(P::default()),
+        };
+
+        let logger: Arc<Mutex<dyn Logger>> = match self.logger.as_ref() {
+            Some(log) => Arc::clone(log),
+            None => Arc::new(Mutex::new(NullLogger::default())),
         };
 
         let wordlist = self
@@ -167,8 +175,6 @@ impl<T: ProgressHandler + Default> BusterBuilder<T> {
             .ok_or(BuilderError::WordlistNotSpecified)?
             .to_owned();
 
-        info!("Using wordlist from: {}", wordlist.to_string_lossy());
-
         Ok(Buster::new(
             threads,
             recursive,
@@ -176,11 +182,12 @@ impl<T: ProgressHandler + Default> BusterBuilder<T> {
             uri,
             total_progress_handler,
             current_progress_handler,
+            logger,
         ))
     }
 }
 
-impl<T: ProgressHandler + Default> Default for BusterBuilder<T> {
+impl<T: ProgressHandler + Send + Sync + Default> Default for BusterBuilder<T> {
     fn default() -> Self {
         Self::new()
     }

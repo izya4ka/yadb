@@ -1,14 +1,14 @@
 use console::style;
-use log::{error, info};
 use reqwest::blocking::Client;
 use std::io::{BufRead, BufReader};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::{fs::File, path::PathBuf};
 use thiserror::Error;
 use url::Url;
 
 use crate::ProgressHandler;
+use crate::lib::logger::traits::{LogLevel, Logger};
 
 #[derive(Error, Debug, Clone)]
 pub enum BusterError {
@@ -16,16 +16,23 @@ pub enum BusterError {
     RequestError(String),
 }
 
-pub struct Buster<T: ProgressHandler + Default + 'static> {
+pub struct Buster<T>
+where
+    T: ProgressHandler + Send + Sync + 'static,
+{
     threads: usize,
     recursive: bool,
     wordlist_path: PathBuf,
     uri: Url,
     total_progress_handler: Arc<T>,
     current_progress_handler: Arc<T>,
+    logger: Arc<Mutex<dyn Logger>>,
 }
 
-impl<Progress: ProgressHandler + Default + 'static> Buster<Progress> {
+impl<Progress> Buster<Progress>
+where
+    Progress: ProgressHandler + Default + Send + Sync + 'static,
+{
     pub fn new(
         threads: usize,
         recursive: bool,
@@ -33,6 +40,7 @@ impl<Progress: ProgressHandler + Default + 'static> Buster<Progress> {
         uri: Url,
         total_progress_handler: Arc<Progress>,
         current_progress_handler: Arc<Progress>,
+        logger: Arc<Mutex<dyn Logger>>,
     ) -> Buster<Progress> {
         Buster {
             threads,
@@ -41,6 +49,7 @@ impl<Progress: ProgressHandler + Default + 'static> Buster<Progress> {
             uri,
             total_progress_handler,
             current_progress_handler,
+            logger,
         }
     }
 
@@ -70,7 +79,9 @@ impl<Progress: ProgressHandler + Default + 'static> Buster<Progress> {
             let client_cloned = client.clone();
             let url = self.uri.clone();
 
-            let threads_num = self.threads;
+            let logger = self.logger.clone();
+            
+            let threads_num = self.threads; 
 
             threads.push(thread::spawn(move || {
                 let words = words.clone();
@@ -89,7 +100,7 @@ impl<Progress: ProgressHandler + Default + 'static> Buster<Progress> {
 
                             if status != 404 {
                                 cpb.println(format!("GET {url} -> {}", style(status).cyan()));
-                                info!("{url} -> {status}");
+                                logger.lock().unwrap().log(LogLevel::INFO, format!("{url} -> {status}"));
                             } else {
                                 cpb.set_message(format!("GET {url} -> {}", style(status).red()));
                             }
@@ -110,9 +121,9 @@ impl<Progress: ProgressHandler + Default + 'static> Buster<Progress> {
 
         for thread in threads {
             match thread.join() {
-                Ok(Err(err)) => error!("{err}"),
+                Ok(Err(err)) => self.logger.lock().unwrap().log(LogLevel::ERROR, err.to_string()),
                 Ok(Ok(())) => (),
-                Err(err) => error!("Panic in thread: {err:?}"),
+                Err(err) => self.logger.lock().unwrap().log(LogLevel::CRITICAL,format!("Panic in thread: {err:?}")),
             }
         }
 

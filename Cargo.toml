@@ -13,12 +13,11 @@ default-run = "yadb-cli"
 clap = { version = "4.5.39", features = ["derive"] }
 indicatif = "0.17.11"
 indicatif-log-bridge = "0.2.3"
-log = "0.4.27"
 reqwest = { version = "0.12.18", features = ["blocking"] }
 thiserror = "2.0.12"
 env_logger = "0.11"
 console = "0.15.11"
-flexi_logger = "0.30.2"
 url = "2.5.4"
 anyhow = "1.0.98"
 hashbrown = "0.15.4"
+chrono = "0.4.41"
