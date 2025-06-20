@@ -59,12 +59,12 @@ fn main() {
     let m = MultiProgress::new();
 
     let cpb = m.add(ProgressBar::no_length());
-    cpb.set_style(ProgressStyle::with_template("{prefix:.bold.dim} {wide_msg}").unwrap());
+    cpb.set_style(ProgressStyle::with_template("{spinner:.green} {prefix:.bold.dim} {wide_msg}").unwrap());
 
     let tpb = m.add(ProgressBar::no_length());
     tpb.set_style(
         ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos:>7}/{len:7} ({eta})",
+            "[{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos:>7}/{len:7} ({eta})",
         )
         .unwrap()
         .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {

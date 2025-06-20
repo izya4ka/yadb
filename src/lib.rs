@@ -29,6 +29,7 @@ pub struct CliProgress {
 
 impl ProgressHandler for CliProgress {
     fn start(&self, total: usize) {
+        self.pb.reset();
         self.pb.set_length(total.try_into().unwrap());
     }
 
