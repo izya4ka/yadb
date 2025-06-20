@@ -1,8 +1,8 @@
 use console::style;
-use log::{error, info, warn};
+use log::{error, info};
 use reqwest::blocking::Client;
 use std::io::{BufRead, BufReader};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::{fs::File, path::PathBuf};
 use thiserror::Error;
@@ -21,19 +21,19 @@ pub struct Buster<T: ProgressHandler + Default + 'static> {
     recursive: bool,
     wordlist_path: PathBuf,
     uri: Url,
-    total_progress_handler: Arc<Mutex<T>>,
-    current_progress_handler: Arc<Mutex<T>>,
+    total_progress_handler: Arc<T>,
+    current_progress_handler: Arc<T>,
 }
 
-impl<T: ProgressHandler + Default + 'static> Buster<T> {
+impl<Progress: ProgressHandler + Default + 'static> Buster<Progress> {
     pub fn new(
         threads: usize,
         recursive: bool,
         wordlist: PathBuf,
         uri: Url,
-        total_progress_handler: Arc<Mutex<T>>,
-        current_progress_handler: Arc<Mutex<T>>,
-    ) -> Buster<T> {
+        total_progress_handler: Arc<Progress>,
+        current_progress_handler: Arc<Progress>,
+    ) -> Buster<Progress> {
         Buster {
             threads,
             recursive,
@@ -51,14 +51,8 @@ impl<T: ProgressHandler + Default + 'static> Buster<T> {
         let slice_size = lines.len() / self.threads;
 
         {
-            self.current_progress_handler
-                .lock()
-                .unwrap()
-                .start(lines.len());
-            self.total_progress_handler
-                .lock()
-                .unwrap()
-                .start(lines.len());
+            self.current_progress_handler.start(lines.len());
+            self.total_progress_handler.start(lines.len());
         }
 
         let lines_arc = Arc::new(lines);
@@ -89,23 +83,26 @@ impl<T: ProgressHandler + Default + 'static> Buster<T> {
                 for word in words_slice {
                     let url = format!("{url}{word}");
 
-                    if let Ok(res) = client_cloned.get(&url).send() {
-                        let status = res.status().as_u16();
+                    match client_cloned.get(&url).send() {
+                        Ok(res) => {
+                            let status = res.status().as_u16();
 
-                        let locked_cpb = cpb.lock().unwrap();
-
-                        if status != 404 {
-                            locked_cpb.println(format!("GET {url} -> {}", style(status).cyan()));
-                            info!("{url} -> {status}");
-                        } else {
-                            locked_cpb.set_message(format!("GET {url} -> {}", style(status).red()));
+                            if status != 404 {
+                                cpb.println(format!("GET {url} -> {}", style(status).cyan()));
+                                info!("{url} -> {status}");
+                            } else {
+                                cpb.set_message(format!("GET {url} -> {}", style(status).red()));
+                            }
                         }
-                    } else {
-                        println!("Error while sending request to {url}");
-                        warn!("Error while sending request to {url}");
+                        Err(e) => {
+                            cpb.println(format!(
+                                "Error while sending request to {}: {e}",
+                                style(&url).red()
+                            ));
+                        }
                     }
-                    cpb.lock().unwrap().advance();
-                    tpb.lock().unwrap().advance();
+                    cpb.advance();
+                    tpb.advance();
                 }
                 Ok(())
             }));
@@ -118,6 +115,10 @@ impl<T: ProgressHandler + Default + 'static> Buster<T> {
                 Err(err) => error!("Panic in thread: {err:?}"),
             }
         }
+
+        self.current_progress_handler.finish();
+        self.total_progress_handler.finish();
+
         Ok(())
     }
 }

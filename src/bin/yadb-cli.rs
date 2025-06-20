@@ -1,7 +1,4 @@
-use std::{
-    fmt::Write,
-    sync::{Arc, Mutex},
-};
+use std::{fmt::Write, sync::Arc};
 
 use clap::Parser;
 use console::style;
@@ -96,9 +93,10 @@ fn main() {
         .threads(args.threads)
         .uri(&args.uri)
         .wordlist(&args.wordlist)
-        .total_progress_handler(Arc::new(Mutex::new(total_progress_handler)))
-        .current_progress_handler(Arc::new(Mutex::new(current_progress_handler)))
+        .total_progress_handler(Arc::new(total_progress_handler))
+        .current_progress_handler(Arc::new(current_progress_handler))
         .build();
+
     if let Ok(buster) = buster {
         let _ = buster.run();
     }

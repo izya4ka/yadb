@@ -1,7 +1,4 @@
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
 use log::info;
@@ -45,8 +42,8 @@ pub struct BusterBuilder<T: ProgressHandler> {
     wordlist: Option<PathBuf>,
     uri: Option<Url>,
     error: Option<BuilderError>,
-    total_progress_handler: Option<Arc<Mutex<T>>>,
-    current_progress_handler: Option<Arc<Mutex<T>>>,
+    total_progress_handler: Option<Arc<T>>,
+    current_progress_handler: Option<Arc<T>>,
 }
 
 impl<T: ProgressHandler + Default> BusterBuilder<T> {
@@ -103,12 +100,12 @@ impl<T: ProgressHandler + Default> BusterBuilder<T> {
         self
     }
 
-    pub fn total_progress_handler(mut self, tpg: Arc<Mutex<T>>) -> Self {
+    pub fn total_progress_handler(mut self, tpg: Arc<T>) -> Self {
         self.total_progress_handler = Some(tpg);
         self
     }
 
-    pub fn current_progress_handler(mut self, cpg: Arc<Mutex<T>>) -> Self {
+    pub fn current_progress_handler(mut self, cpg: Arc<T>) -> Self {
         self.current_progress_handler = Some(cpg);
         self
     }
@@ -154,14 +151,14 @@ impl<T: ProgressHandler + Default> BusterBuilder<T> {
             DEFAULT_RECURSIVE_MODE
         });
 
-        let total_progress_handler: Arc<Mutex<T>> = match self.total_progress_handler.as_ref() {
+        let total_progress_handler: Arc<T> = match self.total_progress_handler.as_ref() {
             Some(tpg) => tpg.to_owned(),
-            None => Arc::new(Mutex::new(T::default())),
+            None => Arc::new(T::default()),
         };
 
-        let current_progress_handler: Arc<Mutex<T>> = match self.current_progress_handler.as_ref() {
+        let current_progress_handler: Arc<T> = match self.current_progress_handler.as_ref() {
             Some(tpg) => tpg.to_owned(),
-            None => Arc::new(Mutex::new(T::default())),
+            None => Arc::new(T::default()),
         };
 
         let wordlist = self
