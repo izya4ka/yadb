@@ -8,7 +8,7 @@ use thiserror::Error;
 use url::Url;
 
 use crate::ProgressHandler;
-use crate::lib::logger::traits::{LogLevel, Logger};
+use crate::lib::logger::traits::{BusterLogger, LogLevel, Logger};
 
 #[derive(Error, Debug, Clone)]
 pub enum BusterError {
@@ -26,7 +26,7 @@ where
     uri: Url,
     total_progress_handler: Arc<T>,
     current_progress_handler: Arc<T>,
-    logger: Arc<Mutex<dyn Logger>>,
+    logger: Arc<Mutex<BusterLogger>>,
 }
 
 impl<Progress> Buster<Progress>
@@ -40,7 +40,7 @@ where
         uri: Url,
         total_progress_handler: Arc<Progress>,
         current_progress_handler: Arc<Progress>,
-        logger: Arc<Mutex<dyn Logger>>,
+        logger: Arc<Mutex<BusterLogger>>,
     ) -> Buster<Progress> {
         Buster {
             threads,

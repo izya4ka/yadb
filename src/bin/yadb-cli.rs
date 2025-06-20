@@ -7,8 +7,7 @@ use clap::Parser;
 use console::style;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use yadb::{
-    CliProgress,
-    lib::{buster_builder::BusterBuilder, logger::logger::FileLogger, util},
+    lib::{buster_builder::BusterBuilder, logger::{logger::FileLogger, traits::{BusterLogger, NullLogger}}, util}, CliProgress
 };
 
 #[derive(Parser)]
@@ -69,21 +68,27 @@ fn main() {
     let total_progress_handler = CliProgress { pb: tpb };
     let current_progress_handler = CliProgress { pb: cpb };
 
-    let builder: BusterBuilder<CliProgress> = BusterBuilder::new()
+    let logger = if let Some(output) = args.output {
+        match FileLogger::new(output) {
+            Ok(log) => BusterLogger::FileLogger(log),
+            Err(err) => {
+                println!("Error: {err}");
+                return;
+            }
+        }
+    } else {
+        BusterLogger::NullLogger(NullLogger::default())
+    };
+
+    let buster = BusterBuilder::new()
         .recursive(args.recursive)
         .threads(args.threads)
         .uri(&args.uri)
         .wordlist(&args.wordlist)
         .total_progress_handler(Arc::new(total_progress_handler))
-        .current_progress_handler(Arc::new(current_progress_handler));
-
-    let buster = if let Some(out) = args.output
-        && let Ok(log) = FileLogger::new(out)
-    {
-        builder.with_logger(Arc::new(Mutex::new(log))).build()
-    } else {
-        builder.build()
-    };
+        .current_progress_handler(Arc::new(current_progress_handler))
+        .with_logger(Arc::new(Mutex::new(logger)))
+        .build();
 
     if let Ok(buster) = buster {
         let _ = buster.run();

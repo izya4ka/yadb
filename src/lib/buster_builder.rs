@@ -8,8 +8,7 @@ use thiserror::Error;
 use url::Url;
 
 use crate::{
-    ProgressHandler,
-    lib::logger::traits::{Logger, NullLogger},
+    lib::logger::traits::{BusterLogger, Logger, NullLogger}, ProgressHandler
 };
 
 use super::buster::Buster;
@@ -52,7 +51,7 @@ where
     error: Option<BuilderError>,
     total_progress_handler: Option<Arc<P>>,
     current_progress_handler: Option<Arc<P>>,
-    logger: Option<Arc<Mutex<dyn Logger>>>,
+    logger: Option<Arc<Mutex<BusterLogger>>>,
 }
 
 impl<P> BusterBuilder<P>
@@ -123,7 +122,7 @@ where
         self
     }
 
-    pub fn with_logger(mut self, logger: Arc<Mutex<dyn Logger>>) -> Self {
+    pub fn with_logger(mut self, logger: Arc<Mutex<BusterLogger>>) -> Self {
         self.logger = Some(logger);
         self
     }
@@ -171,9 +170,9 @@ where
             None => Arc::new(P::default()),
         };
 
-        let logger: Arc<Mutex<dyn Logger>> = match self.logger.as_ref() {
+        let logger: Arc<Mutex<BusterLogger>> = match self.logger.as_ref() {
             Some(log) => Arc::clone(log),
-            None => Arc::new(Mutex::new(NullLogger::default())),
+            None => Arc::new(Mutex::new(BusterLogger::NullLogger(NullLogger::default()))),
         };
 
         let wordlist = self
