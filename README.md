@@ -4,6 +4,7 @@
 ![](https://img.shields.io/crates/l/yadb)
 ![](https://img.shields.io/github/languages/top/izya4ka/yadb)
 
+![WindowsTerminal_XzDicVjS7F-ezgif com-cut](https://github.com/user-attachments/assets/45368b2d-0616-40e4-9eec-5fb33ab9d9b6)
 
 
 **YADB** is a fast and safe directory brute-forcing tool written in **Rust**, inspired by `gobuster`.
