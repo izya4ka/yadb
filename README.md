@@ -24,21 +24,22 @@ cargo install yadb
 ## 🚀 Usage
 
 ```
-yadb-cli [OPTIONS] --wordlist <WORDLIST> --uri <URI>
+Usage: yadb-cli [OPTIONS] --wordlist <WORDLIST> --uri <URI>
 
 Options:
-  -t, --threads <THREADS>    Number of threads [default: 50]
-  -r, --recursive            Recursivly parse directories and files (TODO!)
-  -w, --wordlist <WORDLIST>  Path to wordlist
-  -u, --uri <URI>            Target URI
-  -o, --output <OUTPUT>      Output file
-  -h, --help                 Print help
-  -V, --version              Print version
+  -t, --threads <THREADS>      Number of threads [default: 50]
+  -r, --recursive <RECURSIVE>  Recursivly parse directories and files (recursion depth) [default: 0]
+  -w, --wordlist <WORDLIST>    Path to wordlist
+  -u, --uri <URI>              Target URI
+  -o, --output <OUTPUT>        Output file
+  -h, --help                   Print help
+  -V, --version                Print version
 ```
 
 ## 🛠️ TODO
 
 - [x] CLI interface
+- [x] Recursion
 - [ ] GUI interface (planned, using egui or iced)
 - [ ] Output in HTML/JSON formats
 - [ ] Automatic wordlist updates

@@ -9,6 +9,7 @@ pub mod lib {
 
 pub trait ProgressHandler: Send + Sync {
     fn start(&self, total: usize);
+    fn set_size(&self, size: usize);
     fn advance(&self);
     fn finish(&self);
     fn set_message(&self, str: String);
@@ -21,6 +22,7 @@ impl ProgressHandler for NullProgressHandler {
     fn finish(&self) {}
     fn set_message(&self, _str: String) {}
     fn println(&self, _str: String) {}
+    fn set_size(&self, _size: usize) {}
 }
 
 pub struct CliProgress {
@@ -31,6 +33,10 @@ impl ProgressHandler for CliProgress {
     fn start(&self, total: usize) {
         self.pb.reset();
         self.pb.set_length(total.try_into().unwrap());
+    }
+
+    fn set_size(&self, size: usize) {
+        self.pb.set_length(size.try_into().unwrap());
     }
 
     fn advance(&self) {

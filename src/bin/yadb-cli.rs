@@ -28,9 +28,9 @@ struct Args {
     #[arg(short, long, default_value_t = 50)]
     threads: usize,
 
-    /// Recursivly parse directories and files (TODO!)
-    #[arg(short, long)]
-    recursive: bool,
+    /// Recursivly parse directories and files (recursion depth)
+    #[arg(short, long, default_value_t = 0)]
+    recursive: usize,
 
     /// Path to wordlist
     #[arg(short, long)]
@@ -49,7 +49,7 @@ fn main() {
 
     util::print_logo();
     println!("Threads: {}", style(args.threads.to_string()).cyan());
-    println!("Recursive: {}", style(args.recursive.to_string()).cyan());
+    println!("Recursion depth: {}", style(args.recursive.to_string()).cyan());
     println!("Wordlist path: {}", style(args.wordlist.to_string()).cyan());
     println!("Target: {}", style(args.uri.to_string()).cyan());
     if let Some(output) = args.output.as_ref() {

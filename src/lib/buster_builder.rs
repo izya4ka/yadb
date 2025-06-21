@@ -12,7 +12,7 @@ use crate::{
 use super::buster::Buster;
 
 const DEFAULT_THREADS_NUMBER: usize = 10;
-const DEFAULT_RECURSIVE_MODE: bool = false;
+const DEFAULT_RECURSIVE_MODE: usize = 0;
 
 #[derive(Error, Debug, Clone)]
 pub enum BuilderError {
@@ -43,7 +43,7 @@ where
     P: ProgressHandler + Send + Sync + Default,
 {
     threads: Option<usize>,
-    recursive: Option<bool>,
+    recursive: Option<usize>,
     wordlist: Option<PathBuf>,
     uri: Option<Url>,
     error: Option<BuilderError>,
@@ -78,7 +78,7 @@ where
         self
     }
 
-    pub fn recursive(mut self, recursive: bool) -> Self {
+    pub fn recursive(mut self, recursive: usize) -> Self {
         if self.error.is_some() {
             return self;
         }

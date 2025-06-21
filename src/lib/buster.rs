@@ -1,11 +1,13 @@
 use console::style;
-use reqwest::blocking::Client;
+use reqwest::blocking::{ClientBuilder};
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
+use std::time::Duration;
 use std::{fs::File, path::PathBuf};
 use thiserror::Error;
 use url::Url;
+use anyhow::Result;
 
 use crate::ProgressHandler;
 use crate::lib::logger::traits::{BusterLogger, LogLevel};
@@ -21,7 +23,7 @@ where
     T: ProgressHandler + Send + Sync + 'static,
 {
     threads: usize,
-    recursive: bool,
+    recursion_depth: usize,
     wordlist_path: PathBuf,
     uri: Url,
     total_progress_handler: Arc<T>,
@@ -35,7 +37,7 @@ where
 {
     pub fn new(
         threads: usize,
-        recursive: bool,
+        recursion_depth: usize,
         wordlist: PathBuf,
         uri: Url,
         total_progress_handler: Arc<Progress>,
@@ -44,7 +46,7 @@ where
     ) -> Buster<Progress> {
         Buster {
             threads,
-            recursive,
+            recursion_depth,
             wordlist_path: wordlist,
             uri,
             total_progress_handler,
@@ -53,22 +55,42 @@ where
         }
     }
 
-    pub fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn run(&self) -> Result<()> {
+        let mut urls_vec: Vec<Url> = Vec::new();
+        urls_vec.push(self.uri.clone());
         let file = File::open(&self.wordlist_path)?;
-        let lines: Vec<String> = BufReader::new(file).lines().map_while(Result::ok).collect();
+        let lines: Arc<Vec<String>> = Arc::new(BufReader::new(file).lines().map_while(Result::ok).collect());
+        let lines_len = lines.len();
+        let mut progress_len = lines_len;
+
+        while let Some(url) = urls_vec.pop() {
+            if url.path_segments().unwrap().collect::<Vec<_>>().len()-1 > self.recursion_depth { continue; }
+                let lines = lines.clone();
+                self.current_progress_handler.set_size(progress_len);
+                self.total_progress_handler.set_size(progress_len);
+                let urls_result = self.execute(url, lines)?;
+
+                progress_len += urls_result.len() * lines_len; 
+                urls_vec.extend(urls_result);
+        }
+
+        self.current_progress_handler.finish();
+        self.total_progress_handler.finish();
+        Ok(())
+    }
+
+    pub fn execute(&self, url: Url, lines: Arc<Vec<String>>) -> Result<Vec<Url>> {
+        
 
         let slice_size = lines.len() / self.threads;
 
-        {
-            self.current_progress_handler.start(lines.len());
-            self.total_progress_handler.start(lines.len());
-        }
+        let lines_arc = lines.clone();
 
-        let lines_arc = Arc::new(lines);
+        let mut result: Vec<Url> = Vec::new();
 
-        let mut threads: Vec<JoinHandle<Result<(), BusterError>>> = Vec::new();
+        let mut threads: Vec<JoinHandle<Result<Vec<Url>, BusterError>>> = Vec::new();
 
-        let client = Arc::new(Client::new());
+        let client = ClientBuilder::new().connect_timeout(Duration::from_millis(5000)).build()?;
 
         for thr in 0..self.threads {
             let words = lines_arc.clone();
@@ -77,13 +99,13 @@ where
             let cpb = self.current_progress_handler.clone();
 
             let client_cloned = client.clone();
-            let url = self.uri.clone();
+            let url = url.clone();
 
             let logger = self.logger.clone();
-
             let threads_num = self.threads;
 
             threads.push(thread::spawn(move || {
+
                 let words = words.clone();
                 let words_slice = if thr != threads_num - 1 {
                     &words[slice_size * thr..slice_size * thr + slice_size]
@@ -91,16 +113,17 @@ where
                     &words[slice_size * thr..]
                 };
 
-                for word in words_slice {
-                    let url = format!("{url}{word}");
+                let mut result: Vec<Url> = Vec::new();
 
+                for word in words_slice {
+                    let url = format!("{url}{word}/");
                     match client_cloned.get(&url).send() {
                         Ok(res) => {
                             let status = res.status().as_u16();
-
                             if status != 404 {
                                 cpb.println(format!("GET {url} -> {}", style(status).cyan()));
                                 logger.log(LogLevel::INFO, format!("{url} -> {status}"));
+                                result.push(Url::parse(&url).unwrap());
                             } else {
                                 cpb.set_message(format!("GET {url} -> {}", style(status).red()));
                             }
@@ -115,23 +138,23 @@ where
                     cpb.advance();
                     tpb.advance();
                 }
-                Ok(())
+                Ok(result)
             }));
         }
 
         for thread in threads {
             match thread.join() {
+                Ok(Ok(res)) => {
+                    result.extend(res);
+                },
+
                 Ok(Err(err)) => self.logger.log(LogLevel::ERROR, err.to_string()),
-                Ok(Ok(())) => (),
                 Err(err) => self
                     .logger
                     .log(LogLevel::CRITICAL, format!("Panic in thread: {err:?}")),
             }
         }
 
-        self.current_progress_handler.finish();
-        self.total_progress_handler.finish();
-
-        Ok(())
+        Ok(result)
     }
 }
