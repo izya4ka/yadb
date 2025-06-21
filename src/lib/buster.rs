@@ -1,12 +1,12 @@
 use anyhow::Result;
 use console::style;
-use reqwest::blocking::ClientBuilder;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 use std::{fs::File, path::PathBuf};
 use thiserror::Error;
+use ureq::Agent;
 use url::Url;
 
 use crate::lib::logger::traits::{BusterLogger, LogLevel};
@@ -29,6 +29,7 @@ where
     total_progress_handler: Arc<T>,
     current_progress_handler: Arc<T>,
     logger: Arc<BusterLogger>,
+    timeout: usize,
 }
 
 impl<Progress> Buster<Progress>
@@ -38,6 +39,7 @@ where
     pub fn new(
         threads: usize,
         recursion_depth: usize,
+        timeout: usize,
         wordlist: PathBuf,
         uri: Url,
         total_progress_handler: Arc<Progress>,
@@ -52,6 +54,7 @@ where
             total_progress_handler,
             current_progress_handler,
             logger,
+            timeout,
         }
     }
 
@@ -95,9 +98,12 @@ where
 
         let mut threads: Vec<JoinHandle<Result<Vec<Url>, BusterError>>> = Vec::new();
 
-        let client = ClientBuilder::new()
-            .connect_timeout(Duration::from_millis(5000))
-            .build()?;
+        let agent: Agent = Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(self.timeout.try_into().unwrap())))
+            .http_status_as_error(false)
+            .build()
+            .into();
+        let client = Arc::new(agent);
 
         for thr in 0..self.threads {
             let words = lines_arc.clone();
@@ -128,7 +134,7 @@ where
                         format!("{url}/{word}/")
                     };
 
-                    match client_cloned.get(&url).send() {
+                    match client_cloned.get(&url).call() {
                         Ok(res) => {
                             let status = res.status().as_u16();
                             if status != 404 {

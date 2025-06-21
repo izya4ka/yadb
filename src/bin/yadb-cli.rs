@@ -26,9 +26,13 @@ struct Args {
     #[arg(short, long, default_value_t = 50)]
     threads: usize,
 
+    /// Timeout of request in seconds
+    #[arg(long, default_value_t = 5)]
+    timeout: usize,
+
     /// Recursivly parse directories and files (recursion depth)
     #[arg(short, long, default_value_t = 0)]
-    recursive: usize,
+    recursion: usize,
 
     /// Path to wordlist
     #[arg(short, long)]
@@ -49,7 +53,11 @@ fn main() {
     println!("Threads: {}", style(args.threads.to_string()).cyan());
     println!(
         "Recursion depth: {}",
-        style(args.recursive.to_string()).cyan()
+        style(args.recursion.to_string()).cyan()
+    );
+    println!(
+        "Timeout: {} seconds",
+        style(args.timeout.to_string()).cyan()
     );
     println!("Wordlist path: {}", style(args.wordlist.to_string()).cyan());
     println!("Target: {}", style(args.uri.to_string()).cyan());
@@ -92,8 +100,9 @@ fn main() {
     };
 
     let buster = BusterBuilder::new()
-        .recursive(args.recursive)
+        .recursive(args.recursion)
         .threads(args.threads)
+        .timeout(args.timeout)
         .uri(&args.uri)
         .wordlist(&args.wordlist)
         .total_progress_handler(Arc::new(total_progress_handler))

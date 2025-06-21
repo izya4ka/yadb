@@ -11,8 +11,9 @@ use crate::lib::{
 
 use super::buster::Buster;
 
-const DEFAULT_THREADS_NUMBER: usize = 10;
+const DEFAULT_THREADS_NUMBER: usize = 50;
 const DEFAULT_RECURSIVE_MODE: usize = 0;
+const DEFAULT_TIMEOUT: usize = 5;
 
 #[derive(Error, Debug, Clone)]
 pub enum BuilderError {
@@ -43,7 +44,8 @@ where
     P: ProgressHandler + Send + Sync + Default,
 {
     threads: Option<usize>,
-    recursive: Option<usize>,
+    recursion: Option<usize>,
+    timeout: Option<usize>,
     wordlist: Option<PathBuf>,
     uri: Option<Url>,
     error: Option<BuilderError>,
@@ -59,13 +61,14 @@ where
     pub fn new() -> Self {
         BusterBuilder {
             threads: None,
-            recursive: None,
+            recursion: None,
             wordlist: None,
             uri: None,
             error: None,
             total_progress_handler: None,
             current_progress_handler: None,
             logger: None,
+            timeout: None,
         }
     }
 
@@ -83,7 +86,16 @@ where
             return self;
         }
 
-        self.recursive = Some(recursive);
+        self.recursion = Some(recursive);
+        self
+    }
+
+    pub fn timeout(mut self, timeout: usize) -> Self {
+        if self.error.is_some() {
+            return self;
+        }
+
+        self.timeout = Some(timeout);
         self
     }
 
@@ -158,8 +170,8 @@ where
             .to_owned();
 
         let threads = self.threads.unwrap_or(DEFAULT_THREADS_NUMBER);
-
-        let recursive = self.recursive.unwrap_or(DEFAULT_RECURSIVE_MODE);
+        let recursion_depth = self.recursion.unwrap_or(DEFAULT_RECURSIVE_MODE);
+        let timeout = self.timeout.unwrap_or(DEFAULT_TIMEOUT);
 
         let total_progress_handler: Arc<P> = match self.total_progress_handler.as_ref() {
             Some(tpg) => Arc::clone(tpg),
@@ -184,7 +196,8 @@ where
 
         Ok(Buster::new(
             threads,
-            recursive,
+            recursion_depth,
+            timeout,
             wordlist,
             uri,
             total_progress_handler,
