@@ -6,16 +6,14 @@ use std::{
 use clap::Parser;
 use console::style;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
-use yadb::{
-    CliProgress,
-    lib::{
-        buster_builder::BusterBuilder,
-        logger::{
-            file_logger::FileLogger,
-            traits::{BusterLogger, NullLogger},
-        },
-        util,
+use yadb::lib::{
+    buster_builder::BusterBuilder,
+    logger::{
+        file_logger::FileLogger,
+        traits::{BusterLogger, NullLogger},
     },
+    progress_handler::traits::CliProgress,
+    util,
 };
 
 #[derive(Parser)]
@@ -49,7 +47,10 @@ fn main() {
 
     util::print_logo();
     println!("Threads: {}", style(args.threads.to_string()).cyan());
-    println!("Recursion depth: {}", style(args.recursive.to_string()).cyan());
+    println!(
+        "Recursion depth: {}",
+        style(args.recursive.to_string()).cyan()
+    );
     println!("Wordlist path: {}", style(args.wordlist.to_string()).cyan());
     println!("Target: {}", style(args.uri.to_string()).cyan());
     if let Some(output) = args.output.as_ref() {
@@ -59,7 +60,9 @@ fn main() {
     let m = MultiProgress::new();
 
     let cpb = m.add(ProgressBar::no_length());
-    cpb.set_style(ProgressStyle::with_template("{spinner:.green} {prefix:.bold.dim} {wide_msg}").unwrap());
+    cpb.set_style(
+        ProgressStyle::with_template("{spinner:.green} {prefix:.bold.dim} {wide_msg}").unwrap(),
+    );
 
     let tpb = m.add(ProgressBar::no_length());
     tpb.set_style(

@@ -4,9 +4,9 @@ use anyhow::Result;
 use thiserror::Error;
 use url::{ParseError, Url};
 
-use crate::{
-    ProgressHandler,
-    lib::logger::traits::{BusterLogger, NullLogger},
+use crate::lib::{
+    logger::traits::{BusterLogger, NullLogger},
+    progress_handler::traits::ProgressHandler,
 };
 
 use super::buster::Buster;
