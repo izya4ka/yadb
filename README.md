@@ -44,6 +44,9 @@ Options:
 - [ ] Output in HTML/JSON formats
 - [ ] Automatic wordlist updates
 
+## 🙌 Contributions
+Contributions are welcome! If you have ideas for improvements, bug fixes, or new features, feel free to open an issue or submit a pull request.
+
 ## 📄 License
 
 This project is licensed under the **GNU General Public License version 3**.
