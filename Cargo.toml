@@ -1,7 +1,7 @@
 [package]
 name = "yadb"
 description = "Yet Another Directory Buster"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 readme = "README.md"
 repository = "https://github.com/izya4ka/yadb"
@@ -18,3 +18,25 @@ url = "2.5.4"
 anyhow = "1.0.98"
 chrono = "0.4.41"
 ureq = "3.0.12"
+ratatui = "0.29.0"
+color-eyre = "0.6.5"
+crossterm = "0.29.0"
+
+
+[profile.dev]
+opt-level = 0
+debug = true
+incremental = true
+codegen-units = 256
+lto = false
+panic = "unwind"
+strip = "none"
+
+[profile.release]
+opt-level = 2
+debug = false
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+incremental = false

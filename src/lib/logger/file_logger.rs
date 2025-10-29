@@ -5,7 +5,7 @@ use std::{fs::File, io::Write};
 
 use crate::lib::logger::traits::Logger;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct FileLogger {
     file: Option<File>,
 }

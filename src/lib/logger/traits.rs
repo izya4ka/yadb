@@ -9,6 +9,7 @@ pub enum LogLevel {
     CRITICAL,
 }
 
+#[derive(Debug)]
 pub enum BusterLogger {
     NullLogger(NullLogger),
     FileLogger(Mutex<FileLogger>),
@@ -17,7 +18,7 @@ pub enum BusterLogger {
 pub trait Logger: Send + Sync + 'static {
     fn log(&self, level: LogLevel, msg: String);
 }
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct NullLogger {}
 
 impl Logger for NullLogger {

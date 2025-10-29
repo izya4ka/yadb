@@ -2,7 +2,7 @@ use anyhow::Result;
 use console::style;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread::{self, ScopedJoinHandle};
 use std::time::Duration;
 use std::{fs::File, path::PathBuf};
 use thiserror::Error;
@@ -18,9 +18,10 @@ pub enum BusterError {
     RequestError(String),
 }
 
+#[derive(Debug)]
 pub struct Buster<T>
 where
-    T: ProgressHandler + Send + Sync + 'static,
+    T: ProgressHandler + Send + Sync,
 {
     threads: usize,
     recursion_depth: usize,
@@ -34,7 +35,7 @@ where
 
 impl<Progress> Buster<Progress>
 where
-    Progress: ProgressHandler + Default + Send + Sync + 'static,
+    Progress: ProgressHandler + Default + Send + Sync,
 {
     pub fn new(
         threads: usize,
@@ -96,8 +97,6 @@ where
 
         let mut result: Vec<Url> = Vec::new();
 
-        let mut threads: Vec<JoinHandle<Result<Vec<Url>, BusterError>>> = Vec::new();
-
         let agent: Agent = Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(self.timeout.try_into().unwrap())))
             .http_status_as_error(false)
@@ -105,72 +104,77 @@ where
             .into();
         let client = Arc::new(agent);
 
-        for thr in 0..self.threads {
-            let words = lines_arc.clone();
+        thread::scope(|s| {
 
-            let tpb = self.total_progress_handler.clone();
-            let cpb = self.current_progress_handler.clone();
+            let mut threads: Vec<ScopedJoinHandle<Result<Vec<Url>, BusterError>>> = Vec::new();
 
-            let client_cloned = client.clone();
-            let url = url.clone();
+            for thr in 0..self.threads {
+                let words = lines_arc.clone();
 
-            let logger = self.logger.clone();
-            let threads_num = self.threads;
+                let tpb = self.total_progress_handler.clone();
+                let cpb = self.current_progress_handler.clone();
 
-            threads.push(thread::spawn(move || {
-                let words = words.clone();
-                let words_slice = if thr != threads_num - 1 {
-                    &words[slice_size * thr..slice_size * thr + slice_size]
-                } else {
-                    &words[slice_size * thr..]
-                };
+                let client_cloned = client.clone();
+                let url = url.clone();
 
-                let mut result: Vec<Url> = Vec::new();
+                let logger = self.logger.clone();
+                let threads_num = self.threads;
 
-                for word in words_slice {
-                    let url = if url.to_string().ends_with("/") {
-                        format!("{url}{word}/")
+                threads.push(s.spawn(move || {
+                    let words = words.clone();
+                    let words_slice = if thr != threads_num - 1 {
+                        &words[slice_size * thr..slice_size * thr + slice_size]
                     } else {
-                        format!("{url}/{word}/")
+                        &words[slice_size * thr..]
                     };
 
-                    match client_cloned.get(&url).call() {
-                        Ok(res) => {
-                            let status = res.status().as_u16();
-                            if status != 404 {
-                                cpb.println(format!("GET {url} -> {}", style(status).cyan()));
-                                logger.log(LogLevel::INFO, format!("{url} -> {status}"));
-                                result.push(Url::parse(&url).unwrap());
-                            } else {
-                                cpb.set_message(format!("GET {url} -> {}", style(status).red()));
+                    let mut result: Vec<Url> = Vec::new();
+
+                    for word in words_slice {
+                        let url = if url.to_string().ends_with("/") {
+                            format!("{url}{word}")
+                        } else {
+                            format!("{url}/{word}")
+                        };
+
+                        match client_cloned.get(&url).call() {
+                            Ok(res) => {
+                                let status = res.status().as_u16();
+                                if status != 404 {
+                                    cpb.println(format!("GET {url} -> {}", style(status).cyan()));
+                                    logger.log(LogLevel::INFO, format!("{url} -> {status}"));
+                                    result.push(Url::parse(&url).unwrap());
+                                } else {
+                                    cpb.set_message(format!("GET {url} -> {}", style(status).red()));
+                                }
+                            }
+                            Err(e) => {
+                                cpb.println(format!(
+                                    "Error while sending request to {}: {e}",
+                                    style(&url).red()
+                                ));
                             }
                         }
-                        Err(e) => {
-                            cpb.println(format!(
-                                "Error while sending request to {}: {e}",
-                                style(&url).red()
-                            ));
-                        }
+                        cpb.advance();
+                        tpb.advance();
                     }
-                    cpb.advance();
-                    tpb.advance();
-                }
-                Ok(result)
-            }));
-        }
-
-        for thread in threads {
-            match thread.join() {
-                Ok(Ok(res)) => {
-                    result.extend(res);
-                }
-
-                Ok(Err(err)) => self.logger.log(LogLevel::ERROR, err.to_string()),
-                Err(err) => self
-                    .logger
-                    .log(LogLevel::CRITICAL, format!("Panic in thread: {err:?}")),
+                    Ok(result)
+                }));
             }
-        }
+        
+            for thread in threads {
+                match thread.join() {
+                    Ok(Ok(res)) => {
+                        result.extend(res);
+                    }
+
+                    Ok(Err(err)) => self.logger.log(LogLevel::ERROR, err.to_string()),
+                    Err(err) => self
+                        .logger
+                        .log(LogLevel::CRITICAL, format!("Panic in thread: {err:?}")),
+                }
+            }
+        });
 
         Ok(result)
     }

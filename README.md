@@ -40,7 +40,7 @@ Options:
 
 - [x] CLI interface
 - [x] Recursion
-- [ ] GUI interface (planned, using egui or iced)
+- [ ] TUI interface
 - [ ] Output in HTML/JSON formats
 - [ ] Automatic wordlist updates
 
