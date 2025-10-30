@@ -10,8 +10,8 @@ use thiserror::Error;
 use ureq::Agent;
 use url::Url;
 
-use crate::lib::buster_messages::{BusterMessage, ProgressChangeMessage, ProgressMessage};
 use crate::lib::logger::traits::LogLevel;
+use crate::lib::worker::messages::{WorkerMessage, ProgressChangeMessage, ProgressMessage};
 
 #[derive(Error, Debug, Clone)]
 pub enum BusterError {
@@ -20,25 +20,25 @@ pub enum BusterError {
 }
 
 #[derive(Debug)]
-pub struct Buster {
+pub struct Worker {
     threads: usize,
     recursion_depth: usize,
     wordlist_path: PathBuf,
-    message_sender: Arc<Sender<BusterMessage>>,
+    message_sender: Arc<Sender<WorkerMessage>>,
     uri: Url,
     timeout: usize,
 }
 
-impl Buster {
+impl Worker {
     pub fn new(
         threads: usize,
         recursion_depth: usize,
         timeout: usize,
         wordlist: PathBuf,
         uri: Url,
-        message_sender: Arc<Sender<BusterMessage>>,
-    ) -> Buster {
-        Buster {
+        message_sender: Arc<Sender<WorkerMessage>>,
+    ) -> Worker {
+        Worker {
             threads,
             recursion_depth,
             wordlist_path: wordlist,
@@ -68,11 +68,11 @@ impl Buster {
             let lines = lines.clone();
 
             self.message_sender
-                .send(BusterMessage::set_total_size(progress_len))
+                .send(WorkerMessage::set_total_size(progress_len))
                 .expect("SENDER ERROR");
 
             self.message_sender
-                .send(BusterMessage::set_current_size(progress_len))
+                .send(WorkerMessage::set_current_size(progress_len))
                 .expect("SENDER ERROR");
 
             let urls_result = self.execute(url, lines)?;
@@ -82,10 +82,10 @@ impl Buster {
         }
 
         self.message_sender
-            .send(BusterMessage::finish_current())
+            .send(WorkerMessage::finish_current())
             .expect("SENDER ERROR");
         self.message_sender
-            .send(BusterMessage::finish_total())
+            .send(WorkerMessage::finish_total())
             .expect("SENDER ERROR");
         Ok(())
     }
@@ -140,7 +140,7 @@ impl Buster {
                                 if status != 404 {
                                     // cpb.println(format!("GET {url} -> {}", style(status).cyan()));
                                     message_sender
-                                        .send(BusterMessage::Progress(ProgressMessage::Current(
+                                        .send(WorkerMessage::Progress(ProgressMessage::Current(
                                             ProgressChangeMessage::Print(format!(
                                                 "GET {url} -> {}",
                                                 style(status).cyan()
@@ -150,7 +150,7 @@ impl Buster {
 
                                     // logger.log(LogLevel::INFO, format!("{url} -> {status}"));
                                     message_sender
-                                        .send(BusterMessage::Log(
+                                        .send(WorkerMessage::Log(
                                             LogLevel::INFO,
                                             format!("{url} -> {status}"),
                                         ))
@@ -160,7 +160,7 @@ impl Buster {
                                 } else {
                                     // cpb.set_message(format!("GET {url} -> {}", style(status).red()));
                                     message_sender
-                                        .send(BusterMessage::Progress(ProgressMessage::Current(
+                                        .send(WorkerMessage::Progress(ProgressMessage::Current(
                                             ProgressChangeMessage::SetMessage(format!(
                                                 "GET {url} -> {}",
                                                 style(status).red()
@@ -175,7 +175,7 @@ impl Buster {
                                 //     style(&url).red()
                                 // ));
                                 message_sender
-                                    .send(BusterMessage::Progress(ProgressMessage::Current(
+                                    .send(WorkerMessage::Progress(ProgressMessage::Current(
                                         ProgressChangeMessage::Print(format!(
                                             "Error while sending request to {}: {e}",
                                             style(&url).red()
@@ -188,11 +188,11 @@ impl Buster {
                         // tpb.advance();
 
                         message_sender
-                            .send(BusterMessage::advance_current())
+                            .send(WorkerMessage::advance_current())
                             .expect("SENDER ERROR");
                     
                         message_sender
-                            .send(BusterMessage::advance_total())
+                            .send(WorkerMessage::advance_total())
                             .expect("SENDER ERROR");
                     }
                     Ok(result)
@@ -207,11 +207,11 @@ impl Buster {
 
                     Ok(Err(err)) => self
                         .message_sender
-                        .send(BusterMessage::log(LogLevel::ERROR, err.to_string()))
+                        .send(WorkerMessage::log(LogLevel::ERROR, err.to_string()))
                         .expect("SENDER ERROR"),
                     Err(err) => self
                         .message_sender
-                        .send(BusterMessage::log(
+                        .send(WorkerMessage::log(
                             LogLevel::CRITICAL,
                             format!("Panic in thread: {err:?}"),
                         ))

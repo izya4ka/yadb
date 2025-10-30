@@ -4,9 +4,7 @@ use anyhow::Result;
 use thiserror::Error;
 use url::{ParseError, Url};
 
-use crate::lib::buster_messages::BusterMessage;
-
-use super::buster::Buster;
+use crate::lib::worker::{messages::WorkerMessage, worker::Worker};
 
 const DEFAULT_THREADS_NUMBER: usize = 50;
 const DEFAULT_RECURSIVE_MODE: usize = 0;
@@ -39,7 +37,7 @@ pub enum BuilderError {
     SenderChannelNotSpecified
 }
 
-pub struct BusterBuilder
+pub struct WorkerBuilder
 {
     threads: Option<usize>,
     recursion: Option<usize>,
@@ -47,12 +45,12 @@ pub struct BusterBuilder
     wordlist: Option<PathBuf>,
     uri: Option<Url>,
     error: Option<BuilderError>,
-    message_sender: Option<Arc<Sender<BusterMessage>>>,
+    message_sender: Option<Arc<Sender<WorkerMessage>>>,
 }
 
-impl BusterBuilder {
+impl WorkerBuilder {
     pub fn new() -> Self {
-        BusterBuilder {
+        WorkerBuilder {
             threads: None,
             recursion: None,
             wordlist: None,
@@ -72,7 +70,7 @@ impl BusterBuilder {
         self
     }
 
-    pub fn message_sender(mut self, sender: Arc<Sender<BusterMessage>>) -> Self {
+    pub fn message_sender(mut self, sender: Arc<Sender<WorkerMessage>>) -> Self {
         self.message_sender = Some(sender);
         self
     }
@@ -139,7 +137,7 @@ impl BusterBuilder {
         self
     }
 
-    pub fn build(self) -> Result<Buster, BuilderError> {
+    pub fn build(self) -> Result<Worker, BuilderError> {
         if let Some(err) = self.error {
             return Err(err);
         }
@@ -160,7 +158,7 @@ impl BusterBuilder {
             .message_sender
             .ok_or(BuilderError::SenderChannelNotSpecified)?;
 
-        Ok(Buster::new(
+        Ok(Worker::new(
             threads,
             recursion_depth,
             timeout,
@@ -171,7 +169,7 @@ impl BusterBuilder {
     }
 }
 
-impl Default for BusterBuilder {
+impl Default for WorkerBuilder {
     fn default() -> Self {
         Self::new()
     }

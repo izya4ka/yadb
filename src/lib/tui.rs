@@ -1,5 +1,5 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::{DefaultTerminal, Frame, layout::{Constraint, Direction, Layout, Rect}, style::Style, widgets::{Block, BorderType, Borders, Gauge, Widget}};
+use ratatui::{DefaultTerminal, Frame, layout::{Constraint, Direction, Layout}, widgets::{Block, BorderType, Borders}};
 use color_eyre::Result;
 
 /// The main application which holds the state and logic of the application.

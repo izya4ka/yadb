@@ -7,13 +7,11 @@ use clap::Parser;
 use console::style;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use yadb::lib::{
-    buster_builder::BusterBuilder,
-    buster_messages::{BusterMessage, ProgressChangeMessage, ProgressMessage},
     logger::{
         file_logger::FileLogger,
         traits::{BusterLogger, NullLogger},
     },
-    util,
+    util, worker::{builder::WorkerBuilder, messages::{WorkerMessage, ProgressChangeMessage, ProgressMessage}},
 };
 
 #[derive(Parser)]
@@ -96,9 +94,9 @@ fn main() {
         BusterLogger::NullLogger(NullLogger::default())
     };
 
-    let (tx, rx) = mpsc::channel::<BusterMessage>();
+    let (tx, rx) = mpsc::channel::<WorkerMessage>();
 
-    let buster = BusterBuilder::new()
+    let worker = WorkerBuilder::new()
         .recursive(args.recursion)
         .threads(args.threads)
         .timeout(args.timeout)
@@ -107,13 +105,13 @@ fn main() {
         .wordlist(&args.wordlist)
         .build();
 
-    match buster {
+    match worker {
         Ok(buster) => {
             thread::spawn(move || buster.run());
 
             for msg in rx {
                 match msg {
-                    BusterMessage::Progress(progress_message) => match progress_message {
+                    WorkerMessage::Progress(progress_message) => match progress_message {
                         ProgressMessage::Current(progress_change_message) => {
                             match progress_change_message {
                                 ProgressChangeMessage::SetMessage(str) => cpb.set_message(str),
@@ -129,7 +127,7 @@ fn main() {
                                 ProgressChangeMessage::Finish => cpb.finish(),
                             }
                         }
-                        yadb::lib::buster_messages::ProgressMessage::Total(
+                        ProgressMessage::Total(
                             progress_change_message,
                         ) => match progress_change_message {
                             ProgressChangeMessage::SetMessage(str) => tpb.set_message(str),
@@ -145,7 +143,7 @@ fn main() {
                             ProgressChangeMessage::Finish => tpb.finish(),
                         },
                     },
-                    BusterMessage::Log(log_level, str) => {
+                    WorkerMessage::Log(log_level, str) => {
                         logger.log(log_level, str);
                     }
                 }
