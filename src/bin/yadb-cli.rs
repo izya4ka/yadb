@@ -1,6 +1,6 @@
 use std::{
     fmt::Write,
-    sync::{Arc, Mutex},
+    sync::{Mutex, mpsc}, thread,
 };
 
 use clap::Parser;
@@ -8,11 +8,11 @@ use console::style;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use yadb::lib::{
     buster_builder::BusterBuilder,
+    buster_messages::{BusterMessage, ProgressChangeMessage, ProgressMessage},
     logger::{
         file_logger::FileLogger,
         traits::{BusterLogger, NullLogger},
     },
-    progress_handler::traits::CliProgress,
     util,
 };
 
@@ -84,9 +84,6 @@ fn main() {
         .progress_chars("#>-"),
     );
 
-    let total_progress_handler = CliProgress { pb: tpb };
-    let current_progress_handler = CliProgress { pb: cpb };
-
     let logger = if let Some(output) = args.output {
         match FileLogger::new(output) {
             Ok(log) => BusterLogger::FileLogger(Mutex::new(log)),
@@ -99,21 +96,62 @@ fn main() {
         BusterLogger::NullLogger(NullLogger::default())
     };
 
+    let (tx, rx) = mpsc::channel::<BusterMessage>();
+
     let buster = BusterBuilder::new()
         .recursive(args.recursion)
         .threads(args.threads)
         .timeout(args.timeout)
         .uri(&args.uri)
+        .message_sender(tx.into())
         .wordlist(&args.wordlist)
-        .total_progress_handler(Arc::new(total_progress_handler))
-        .current_progress_handler(Arc::new(current_progress_handler))
-        .with_logger(Arc::new(logger))
         .build();
 
     match buster {
         Ok(buster) => {
-            let _ = buster.run();
+            thread::spawn(move || buster.run());
+
+            for msg in rx {
+                match msg {
+                    BusterMessage::Progress(progress_message) => match progress_message {
+                        ProgressMessage::Current(progress_change_message) => {
+                            match progress_change_message {
+                                ProgressChangeMessage::SetMessage(str) => cpb.set_message(str),
+                                ProgressChangeMessage::SetSize(size) => {
+                                    cpb.set_length(size.try_into().unwrap())
+                                }
+                                ProgressChangeMessage::Start(size) => {
+                                    cpb.reset();
+                                    cpb.set_length(size.try_into().unwrap());
+                                }
+                                ProgressChangeMessage::Advance => cpb.inc(1),
+                                ProgressChangeMessage::Print(str) => cpb.println(str),
+                                ProgressChangeMessage::Finish => cpb.finish(),
+                            }
+                        }
+                        yadb::lib::buster_messages::ProgressMessage::Total(
+                            progress_change_message,
+                        ) => match progress_change_message {
+                            ProgressChangeMessage::SetMessage(str) => tpb.set_message(str),
+                            ProgressChangeMessage::SetSize(size) => {
+                                tpb.set_length(size.try_into().unwrap())
+                            }
+                            ProgressChangeMessage::Start(size) => {
+                                tpb.reset();
+                                tpb.set_length(size.try_into().unwrap());
+                            }
+                            ProgressChangeMessage::Advance => tpb.inc(1),
+                            ProgressChangeMessage::Print(str) => tpb.println(str),
+                            ProgressChangeMessage::Finish => tpb.finish(),
+                        },
+                    },
+                    BusterMessage::Log(log_level, str) => {
+                        logger.log(log_level, str);
+                    }
+                }
+            }
         }
+
         Err(err) => println!("Error: {err}"),
     }
 }

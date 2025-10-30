@@ -1,13 +1,10 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::{Arc, mpsc::Sender}};
 
 use anyhow::Result;
 use thiserror::Error;
 use url::{ParseError, Url};
 
-use crate::lib::{
-    logger::traits::{BusterLogger, NullLogger},
-    progress_handler::traits::ProgressHandler,
-};
+use crate::lib::buster_messages::BusterMessage;
 
 use super::buster::Buster;
 
@@ -37,11 +34,12 @@ pub enum BuilderError {
 
     #[error("Not a file: {0}")]
     NotAFile(String),
+
+    #[error("Sender channel not specified")]
+    SenderChannelNotSpecified
 }
 
-pub struct BusterBuilder<P>
-where
-    P: ProgressHandler + Send + Sync + Default,
+pub struct BusterBuilder
 {
     threads: Option<usize>,
     recursion: Option<usize>,
@@ -49,15 +47,10 @@ where
     wordlist: Option<PathBuf>,
     uri: Option<Url>,
     error: Option<BuilderError>,
-    total_progress_handler: Option<Arc<P>>,
-    current_progress_handler: Option<Arc<P>>,
-    logger: Option<Arc<BusterLogger>>,
+    message_sender: Option<Arc<Sender<BusterMessage>>>,
 }
 
-impl<P> BusterBuilder<P>
-where
-    P: ProgressHandler + Sync + Send + Default,
-{
+impl BusterBuilder {
     pub fn new() -> Self {
         BusterBuilder {
             threads: None,
@@ -65,9 +58,7 @@ where
             wordlist: None,
             uri: None,
             error: None,
-            total_progress_handler: None,
-            current_progress_handler: None,
-            logger: None,
+            message_sender: None,
             timeout: None,
         }
     }
@@ -78,6 +69,11 @@ where
         }
 
         self.threads = Some(threads);
+        self
+    }
+
+    pub fn message_sender(mut self, sender: Arc<Sender<BusterMessage>>) -> Self {
+        self.message_sender = Some(sender);
         self
     }
 
@@ -125,21 +121,6 @@ where
         self
     }
 
-    pub fn total_progress_handler(mut self, tpg: Arc<P>) -> Self {
-        self.total_progress_handler = Some(tpg);
-        self
-    }
-
-    pub fn current_progress_handler(mut self, cpg: Arc<P>) -> Self {
-        self.current_progress_handler = Some(cpg);
-        self
-    }
-
-    pub fn with_logger(mut self, logger: Arc<BusterLogger>) -> Self {
-        self.logger = Some(logger);
-        self
-    }
-
     pub fn uri(mut self, uri: &str) -> Self {
         if self.error.is_some() {
             return self;
@@ -158,41 +139,26 @@ where
         self
     }
 
-    pub fn build(&self) -> Result<Buster<P>, BuilderError> {
-        if let Some(err) = &self.error {
-            return Err(err.clone());
+    pub fn build(self) -> Result<Buster, BuilderError> {
+        if let Some(err) = self.error {
+            return Err(err);
         }
 
         let uri = self
             .uri
-            .as_ref()
-            .ok_or(BuilderError::HostNotSpecified)?
-            .to_owned();
+            .ok_or(BuilderError::HostNotSpecified)?;
 
         let threads = self.threads.unwrap_or(DEFAULT_THREADS_NUMBER);
         let recursion_depth = self.recursion.unwrap_or(DEFAULT_RECURSIVE_MODE);
         let timeout = self.timeout.unwrap_or(DEFAULT_TIMEOUT);
 
-        let total_progress_handler: Arc<P> = match self.total_progress_handler.as_ref() {
-            Some(tpg) => Arc::clone(tpg),
-            None => Arc::new(P::default()),
-        };
-
-        let current_progress_handler: Arc<P> = match self.current_progress_handler.as_ref() {
-            Some(cpg) => Arc::clone(cpg),
-            None => Arc::new(P::default()),
-        };
-
-        let logger: Arc<BusterLogger> = match self.logger.as_ref() {
-            Some(log) => Arc::clone(log),
-            None => Arc::new(BusterLogger::NullLogger(NullLogger::default())),
-        };
-
         let wordlist = self
             .wordlist
-            .as_ref()
-            .ok_or(BuilderError::WordlistNotSpecified)?
-            .to_owned();
+            .ok_or(BuilderError::WordlistNotSpecified)?;
+        
+        let message_sender = self
+            .message_sender
+            .ok_or(BuilderError::SenderChannelNotSpecified)?;
 
         Ok(Buster::new(
             threads,
@@ -200,14 +166,12 @@ where
             timeout,
             wordlist,
             uri,
-            total_progress_handler,
-            current_progress_handler,
-            logger,
+            message_sender,
         ))
     }
 }
 
-impl<T: ProgressHandler + Send + Sync + Default> Default for BusterBuilder<T> {
+impl Default for BusterBuilder {
     fn default() -> Self {
         Self::new()
     }

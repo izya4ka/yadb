@@ -2,6 +2,7 @@ use anyhow::Result;
 use console::style;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
+use std::sync::mpsc::Sender;
 use std::thread::{self, ScopedJoinHandle};
 use std::time::Duration;
 use std::{fs::File, path::PathBuf};
@@ -9,8 +10,8 @@ use thiserror::Error;
 use ureq::Agent;
 use url::Url;
 
-use crate::lib::logger::traits::{BusterLogger, LogLevel};
-use crate::lib::progress_handler::traits::ProgressHandler;
+use crate::lib::buster_messages::{BusterMessage, ProgressChangeMessage, ProgressMessage};
+use crate::lib::logger::traits::LogLevel;
 
 #[derive(Error, Debug, Clone)]
 pub enum BusterError {
@@ -19,42 +20,30 @@ pub enum BusterError {
 }
 
 #[derive(Debug)]
-pub struct Buster<T>
-where
-    T: ProgressHandler + Send + Sync,
-{
+pub struct Buster {
     threads: usize,
     recursion_depth: usize,
     wordlist_path: PathBuf,
+    message_sender: Arc<Sender<BusterMessage>>,
     uri: Url,
-    total_progress_handler: Arc<T>,
-    current_progress_handler: Arc<T>,
-    logger: Arc<BusterLogger>,
     timeout: usize,
 }
 
-impl<Progress> Buster<Progress>
-where
-    Progress: ProgressHandler + Default + Send + Sync,
-{
+impl Buster {
     pub fn new(
         threads: usize,
         recursion_depth: usize,
         timeout: usize,
         wordlist: PathBuf,
         uri: Url,
-        total_progress_handler: Arc<Progress>,
-        current_progress_handler: Arc<Progress>,
-        logger: Arc<BusterLogger>,
-    ) -> Buster<Progress> {
+        message_sender: Arc<Sender<BusterMessage>>,
+    ) -> Buster {
         Buster {
             threads,
             recursion_depth,
             wordlist_path: wordlist,
+            message_sender,
             uri,
-            total_progress_handler,
-            current_progress_handler,
-            logger,
             timeout,
         }
     }
@@ -77,16 +66,27 @@ where
             }
 
             let lines = lines.clone();
-            self.current_progress_handler.set_size(progress_len);
-            self.total_progress_handler.set_size(progress_len);
+
+            self.message_sender
+                .send(BusterMessage::set_total_size(progress_len))
+                .expect("SENDER ERROR");
+
+            self.message_sender
+                .send(BusterMessage::set_current_size(progress_len))
+                .expect("SENDER ERROR");
+
             let urls_result = self.execute(url, lines)?;
 
             progress_len += urls_result.len() * lines_len;
             urls_vec.extend(urls_result);
         }
 
-        self.current_progress_handler.finish();
-        self.total_progress_handler.finish();
+        self.message_sender
+            .send(BusterMessage::finish_current())
+            .expect("SENDER ERROR");
+        self.message_sender
+            .send(BusterMessage::finish_total())
+            .expect("SENDER ERROR");
         Ok(())
     }
 
@@ -105,19 +105,16 @@ where
         let client = Arc::new(agent);
 
         thread::scope(|s| {
-
             let mut threads: Vec<ScopedJoinHandle<Result<Vec<Url>, BusterError>>> = Vec::new();
 
             for thr in 0..self.threads {
                 let words = lines_arc.clone();
 
-                let tpb = self.total_progress_handler.clone();
-                let cpb = self.current_progress_handler.clone();
+                let message_sender = self.message_sender.clone();
 
                 let client_cloned = client.clone();
                 let url = url.clone();
 
-                let logger = self.logger.clone();
                 let threads_num = self.threads;
 
                 threads.push(s.spawn(move || {
@@ -132,46 +129,93 @@ where
 
                     for word in words_slice {
                         let url = if url.to_string().ends_with("/") {
-                            format!("{url}{word}")
+                            format!("{url}{word}/")
                         } else {
-                            format!("{url}/{word}")
+                            format!("{url}/{word}/")
                         };
 
                         match client_cloned.get(&url).call() {
                             Ok(res) => {
                                 let status = res.status().as_u16();
                                 if status != 404 {
-                                    cpb.println(format!("GET {url} -> {}", style(status).cyan()));
-                                    logger.log(LogLevel::INFO, format!("{url} -> {status}"));
+                                    // cpb.println(format!("GET {url} -> {}", style(status).cyan()));
+                                    message_sender
+                                        .send(BusterMessage::Progress(ProgressMessage::Current(
+                                            ProgressChangeMessage::Print(format!(
+                                                "GET {url} -> {}",
+                                                style(status).cyan()
+                                            )),
+                                        )))
+                                        .expect("SENDER ERROR");
+
+                                    // logger.log(LogLevel::INFO, format!("{url} -> {status}"));
+                                    message_sender
+                                        .send(BusterMessage::Log(
+                                            LogLevel::INFO,
+                                            format!("{url} -> {status}"),
+                                        ))
+                                        .expect("SENDER ERROR");
+
                                     result.push(Url::parse(&url).unwrap());
                                 } else {
-                                    cpb.set_message(format!("GET {url} -> {}", style(status).red()));
+                                    // cpb.set_message(format!("GET {url} -> {}", style(status).red()));
+                                    message_sender
+                                        .send(BusterMessage::Progress(ProgressMessage::Current(
+                                            ProgressChangeMessage::SetMessage(format!(
+                                                "GET {url} -> {}",
+                                                style(status).red()
+                                            )),
+                                        )))
+                                        .expect("SENDER ERROR");
                                 }
                             }
                             Err(e) => {
-                                cpb.println(format!(
-                                    "Error while sending request to {}: {e}",
-                                    style(&url).red()
-                                ));
+                                // cpb.println(format!(
+                                //     "Error while sending request to {}: {e}",
+                                //     style(&url).red()
+                                // ));
+                                message_sender
+                                    .send(BusterMessage::Progress(ProgressMessage::Current(
+                                        ProgressChangeMessage::Print(format!(
+                                            "Error while sending request to {}: {e}",
+                                            style(&url).red()
+                                        )),
+                                    )))
+                                    .expect("SENDER ERROR")
                             }
                         }
-                        cpb.advance();
-                        tpb.advance();
+                        // cpb.advance();
+                        // tpb.advance();
+
+                        message_sender
+                            .send(BusterMessage::advance_current())
+                            .expect("SENDER ERROR");
+                    
+                        message_sender
+                            .send(BusterMessage::advance_total())
+                            .expect("SENDER ERROR");
                     }
                     Ok(result)
                 }));
             }
-        
+
             for thread in threads {
                 match thread.join() {
                     Ok(Ok(res)) => {
                         result.extend(res);
                     }
 
-                    Ok(Err(err)) => self.logger.log(LogLevel::ERROR, err.to_string()),
+                    Ok(Err(err)) => self
+                        .message_sender
+                        .send(BusterMessage::log(LogLevel::ERROR, err.to_string()))
+                        .expect("SENDER ERROR"),
                     Err(err) => self
-                        .logger
-                        .log(LogLevel::CRITICAL, format!("Panic in thread: {err:?}")),
+                        .message_sender
+                        .send(BusterMessage::log(
+                            LogLevel::CRITICAL,
+                            format!("Panic in thread: {err:?}"),
+                        ))
+                        .expect("SENDER ERROR"),
                 }
             }
         });
