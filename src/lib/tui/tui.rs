@@ -8,6 +8,7 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, BorderType, Borders, List, ListItem, ListState},
 };
+use strip_ansi_escapes::strip_str;
 use std::{
     sync::mpsc::{self, Receiver},
     thread::{self, JoinHandle},
@@ -38,7 +39,7 @@ enum CurrentWindow {
 
 #[derive(Debug)]
 enum WorkerType {
-    Worker(JoinHandle<AnyResult<()>>),
+    Worker,
     Builder(WorkerBuilder),
 }
 
@@ -111,14 +112,14 @@ impl App {
                                 ProgressMessage::Current(progress_change_message) => {
                                     match progress_change_message {
                                         crate::lib::worker::messages::ProgressChangeMessage::SetMessage(str) => {
-                                            self.workers_info_state[sel].current_parsing = str;
+                                            self.workers_info_state[sel].current_parsing = strip_str(str);
                                         },
                                         crate::lib::worker::messages::ProgressChangeMessage::SetSize(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Start(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Advance => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Print(msg) => {
                                             let messages = &mut self.workers_info_state[sel].messages;
-                                            messages.push_back(msg);
+                                            messages.push_back(strip_str(msg));
                                             if messages.len() > MESSAGES_MAX {
                                                 messages.pop_front();
                                             }
@@ -132,9 +133,9 @@ impl App {
                             
                             let log = &mut self.workers_info_state[sel].log;
                             match loglevel {
-                                crate::lib::logger::traits::LogLevel::WARN => log.push_front("[WARN] ".to_owned() + &str),
-                                crate::lib::logger::traits::LogLevel::ERROR => log.push_front("[ERROR] ".to_owned() + &str),
-                                crate::lib::logger::traits::LogLevel::CRITICAL => log.push_front("[CRITICAL]".to_owned() + &str),
+                                crate::lib::logger::traits::LogLevel::WARN => log.push_front("[WARN] ".to_owned() + &strip_str(str)),
+                                crate::lib::logger::traits::LogLevel::ERROR => log.push_front("[ERROR] ".to_owned() + &strip_str(str)),
+                                crate::lib::logger::traits::LogLevel::CRITICAL => log.push_front("[CRITICAL]".to_owned() + &strip_str(str)),
                                 _ => {},
                             }
                             if log.len() > LOG_MAX {
@@ -343,8 +344,8 @@ impl App {
                         let worker_result = builder_clone.build();
                         match worker_result {
                             Ok(worker) => {
-                                self.workers[sel].worker_type =
-                                    WorkerType::Worker(thread::spawn(move || worker.run()));
+                                self.workers[sel].worker_type = WorkerType::Worker;
+                                thread::spawn(move || worker.run());
                                 self.workers_info_state[sel].worker = WorkerVariant::Worker;
                             }
                             Err(err) => {
