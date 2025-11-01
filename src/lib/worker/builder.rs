@@ -37,7 +37,7 @@ pub enum BuilderError {
     SenderChannelNotSpecified
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WorkerBuilder
 {
     pub threads: Option<usize>,

@@ -1,22 +1,32 @@
-use std::sync::mpsc::{self, Receiver};
+use std::{
+    collections::VecDeque,
+    default,
+    sync::mpsc::{self, Receiver},
+    thread,
+};
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{self, Constraint, Flex, Layout, Rect},
     style::{Style, Stylize},
+    text::Text,
     widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
 };
 
 use crate::lib::worker::{
-    builder::{DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT, WorkerBuilder},
+    builder::{
+        BuilderError, DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT,
+        WorkerBuilder,
+    },
     messages::WorkerMessage,
     worker::Worker,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Default, Clone)]
 pub enum WorkerVariant {
-    Worker(Worker),
-    Builder(WorkerBuilder),
+    Worker,
+    #[default]
+    Builder,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -31,19 +41,13 @@ pub enum Field {
     RunButton,
 }
 
-impl Default for WorkerVariant {
-    fn default() -> Self {
-        WorkerVariant::Builder(WorkerBuilder::default())
-    }
-}
-
 #[derive(Debug)]
 pub struct WorkerProperties {
-    threads: String,
-    recursion: String,
-    timeout: String,
-    wordlist_path: String,
-    uri: String,
+    pub threads: String,
+    pub recursion: String,
+    pub timeout: String,
+    pub wordlist_path: String,
+    pub uri: String,
 }
 
 impl Default for WorkerProperties {
@@ -64,12 +68,29 @@ pub struct WorkerState {
     pub worker: WorkerVariant,
     currently_editing: Option<Field>,
     selected: Field,
-    properties: WorkerProperties,
-    rx: Receiver<WorkerMessage>,
-    log: Vec<String>,
-    progress_max: usize,
-    progress_current: usize,
-    is_running: bool,
+    pub properties: WorkerProperties,
+    pub log: VecDeque<String>,
+    pub messages: VecDeque<String>,
+    pub progress_max: usize,
+    pub progress_current: usize,
+    pub do_build: bool,
+}
+
+impl Default for WorkerState {
+    fn default() -> Self {
+        Self {
+            name: "Unnamed".to_string(),
+            worker: Default::default(),
+            currently_editing: Default::default(),
+            selected: Default::default(),
+            properties: Default::default(),
+            log: Default::default(),
+            messages: Default::default(),
+            progress_max: Default::default(),
+            progress_current: Default::default(),
+            do_build: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -85,9 +106,25 @@ impl StatefulWidget for WorkerInfo {
         state: &mut Self::State,
     ) {
         match &state.worker {
-            WorkerVariant::Worker(worker) => todo!(),
-            WorkerVariant::Builder(_) => {
-                let layout: [ratatui::prelude::Rect; 7] = Layout::new(
+            WorkerVariant::Worker => {
+                let layout: [Rect; 3] = Layout::new(
+                    layout::Direction::Vertical,
+                    [Constraint::Min(10), Constraint::Min(50), Constraint::Max(4)],
+                )
+                .areas(area);
+
+                let log_block = Block::new().borders(Borders::all()).title(" Logs ");
+                let message_block = Block::new().borders(Borders::all()).title(" Results ");
+
+                Paragraph::new(Text::from_iter(state.log.clone()))
+                    .block(log_block)
+                    .render(layout[0], buf);
+                Paragraph::new(Text::from_iter(state.messages.clone()))
+                    .block(message_block)
+                    .render(layout[1], buf);
+            }
+            WorkerVariant::Builder => {
+                let layout: [Rect; 7] = Layout::new(
                     layout::Direction::Vertical,
                     [
                         Constraint::Max(3),
@@ -149,7 +186,9 @@ impl StatefulWidget for WorkerInfo {
                             wordlist_path_block.border_style(Style::default().red())
                     }
                     Field::URI => uri_block = uri_block.border_style(Style::default().red()),
-                    Field::RunButton => run_button = run_button.border_style(Style::default().green()),
+                    Field::RunButton => {
+                        run_button = run_button.border_style(Style::default().green())
+                    }
                 }
 
                 if let Some(input) = &state.currently_editing {
@@ -180,8 +219,14 @@ impl StatefulWidget for WorkerInfo {
                 wordlist_path_paragraph
                     .block(wordlist_path_block)
                     .render(layout[5], buf);
-                Paragraph::new("Run").centered().block(run_button).alignment(layout::Alignment::Center).render(Self::center(layout[6], Constraint::Max(40), Constraint::Length(3)), buf);
-
+                Paragraph::new("Run")
+                    .centered()
+                    .block(run_button)
+                    .alignment(layout::Alignment::Center)
+                    .render(
+                        Self::center(layout[6], Constraint::Max(40), Constraint::Length(3)),
+                        buf,
+                    );
             }
         }
     }
@@ -194,34 +239,16 @@ impl WorkerInfo {
             .areas(area);
         let [area] = Layout::vertical([vertical]).flex(Flex::Center).areas(area);
         area
-}
-}
-
-impl Default for WorkerState {
-    fn default() -> Self {
-        let (tx, rx) = mpsc::channel::<WorkerMessage>();
-        Self {
-            name: "Unnamed".to_string(),
-            worker: WorkerVariant::Builder(WorkerBuilder::new().message_sender(tx.into())),
-            rx,
-            currently_editing: Default::default(),
-            properties: Default::default(),
-            selected: Default::default(),
-            log: Default::default(),
-            progress_max: Default::default(),
-            progress_current: Default::default(),
-            is_running: Default::default(),
-        }
     }
 }
 
 impl WorkerState {
     pub fn handle_keys(&mut self, key: KeyEvent, is_editing: &mut bool) {
         match self.worker {
-            WorkerVariant::Worker(_) => match (key.modifiers, key.code) {
+            WorkerVariant::Worker => match (key.modifiers, key.code) {
                 _ => {}
             },
-            WorkerVariant::Builder(_) => match (key.modifiers, key.code) {
+            WorkerVariant::Builder => match (key.modifiers, key.code) {
                 (_, KeyCode::Down) => match &self.selected {
                     Field::Name => self.selected = Field::URI,
                     Field::URI => self.selected = Field::Threads,
@@ -243,6 +270,11 @@ impl WorkerState {
                 (_, KeyCode::Char('r')) => {
                     self.currently_editing = Some(self.selected);
                     *is_editing = true;
+                }
+                (_, KeyCode::Enter) => {
+                    if self.selected == Field::RunButton {
+                        self.do_build = true;
+                    }
                 }
                 _ => {}
             },

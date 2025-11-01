@@ -1,8 +1,4 @@
-use std::{
-    sync::mpsc::{self, Receiver},
-    time::Duration,
-};
-
+use anyhow::Result as AnyResult;
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -12,17 +8,55 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, BorderType, Borders, List, ListItem, ListState},
 };
+use std::{
+    sync::mpsc::{self, Receiver},
+    thread::{self, JoinHandle},
+    time::Duration,
+};
 
 use crate::lib::{
-    tui::widgets::{popup::Popup, worker_info::{WorkerInfo, WorkerState, WorkerVariant}},
-    worker::{builder::WorkerBuilder, messages::WorkerMessage, worker::Worker},
+    tui::widgets::{
+        popup::Popup,
+        worker_info::{WorkerInfo, WorkerState, WorkerVariant},
+    },
+    worker::{
+        builder::{BuilderError, WorkerBuilder},
+        messages::{ProgressMessage, WorkerMessage},
+        worker::Worker,
+    },
 };
+
+const LOG_MAX: usize = 5;
+const MESSAGES_MAX: usize = 30;
 
 #[derive(Debug, Default, PartialEq)]
 enum CurrentWindow {
     #[default]
     Workers,
     Info,
+}
+
+#[derive(Debug)]
+enum WorkerType {
+    Worker(JoinHandle<AnyResult<()>>),
+    Builder(WorkerBuilder),
+}
+
+#[derive(Debug)]
+struct WorkerRx {
+    worker_type: WorkerType,
+    rx: Receiver<WorkerMessage>,
+}
+
+impl Default for WorkerRx {
+    fn default() -> Self {
+        let (tx, rx) = mpsc::channel::<WorkerMessage>();
+
+        Self {
+            worker_type: WorkerType::Builder(WorkerBuilder::new().message_sender(tx.into())),
+            rx,
+        }
+    }
 }
 
 /// The main application which holds the state and logic of the application.
@@ -33,9 +67,11 @@ pub struct App {
 
     // Logic state
     current_window: CurrentWindow,
-    workers_state: Vec<WorkerState>,
+    workers_info_state: Vec<WorkerState>,
+    workers: Vec<WorkerRx>,
     show_help_popup: bool,
     worker_list_state: ListState,
+    builder_error: Option<BuilderError>,
     is_editing: bool,
 }
 
@@ -51,6 +87,55 @@ impl App {
         while self.running {
             terminal.draw(|frame| self.render(frame))?;
             self.handle_crossterm_events()?;
+
+            for (sel, worker_state) in self.workers.iter_mut().enumerate() {
+                let msg = worker_state.rx.try_recv();
+                if let Ok(msg) = msg {
+                    match msg {
+                        WorkerMessage::Progress(progress_message) => {
+                            match progress_message {
+                                ProgressMessage::Total(progress_change_message) => {
+                                    match progress_change_message {
+                                        crate::lib::worker::messages::ProgressChangeMessage::SetMessage(_) => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::SetSize(size) => {
+                                            self.workers_info_state[sel].progress_max = size;
+                                        },
+                                        crate::lib::worker::messages::ProgressChangeMessage::Start(_) => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::Advance => {
+                                            self.workers_info_state[sel].progress_current += 1;
+                                        },
+                                        crate::lib::worker::messages::ProgressChangeMessage::Print(str) => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::Finish => {},
+                                    }
+                                },
+                                ProgressMessage::Current(progress_change_message) => {
+                                    match progress_change_message {
+                                        crate::lib::worker::messages::ProgressChangeMessage::SetMessage(_) => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::SetSize(_) => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::Start(_) => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::Advance => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::Print(msg) => {
+                                            let logs = &mut self.workers_info_state[sel].log;
+                                            logs.push_back(msg);
+                                            if logs.len() > LOG_MAX {
+                                                logs.pop_front();
+                                            }
+                                        },
+                                        crate::lib::worker::messages::ProgressChangeMessage::Finish => {},
+                                    }
+                                },
+                            }
+                        },
+                        WorkerMessage::Log(_, str) => {
+                            let messages = &mut self.workers_info_state[sel].messages;
+                            messages.push_front(str);
+                            if messages.len() > MESSAGES_MAX {
+                                messages.pop_front();
+                            }
+                        },
+                    }
+                }
+            }
         }
         Ok(())
     }
@@ -98,7 +183,9 @@ impl App {
         frame.render_widget(block_list, rect_list);
         frame.render_widget(block_info, rect_info);
 
-        let workers_name_list = self.workers_state.iter()
+        let workers_name_list = self
+            .workers_info_state
+            .iter()
             .enumerate()
             .map(|(i, w)| {
                 let mut item = ListItem::new(w.name.clone());
@@ -112,13 +199,14 @@ impl App {
                     }
                 }
                 item
-            }).collect::<Vec<ListItem>>();
+            })
+            .collect::<Vec<ListItem>>();
         let workers_list = List::new(workers_name_list);
         frame.render_stateful_widget(workers_list, block_list_inner, &mut self.worker_list_state);
 
         if let Some(sel) = self.worker_list_state.selected() {
-            let worker_info = WorkerInfo{};
-            let state = &mut self.workers_state[sel];
+            let worker_info = WorkerInfo {};
+            let state = &mut self.workers_info_state[sel];
             frame.render_stateful_widget(worker_info, block_info_inner, state);
         }
 
@@ -153,22 +241,19 @@ impl App {
                 } else {
                     self.quit()
                 }
+            }
+            (_, KeyCode::Tab) => match self.current_window {
+                CurrentWindow::Workers => self.current_window = CurrentWindow::Info,
+                CurrentWindow::Info => self.current_window = CurrentWindow::Workers,
             },
-            (_, KeyCode::Tab) => {
-                match self.current_window {
-                    CurrentWindow::Workers => self.current_window = CurrentWindow::Info,
-                    CurrentWindow::Info => self.current_window = CurrentWindow::Workers,
-                }
-            },
-            (_, KeyCode::Char('h')) => {
-                if !self.is_editing {
-                    self.show_help_popup = !self.show_help_popup
-                }
-            },
-            _ =>
-                match self.current_window {
-                    CurrentWindow::Workers => self.handle_workers_list_keys(key),
-                    CurrentWindow::Info => self.handle_worker_info_keys(key),
+            // (_, KeyCode::Char('h')) => {
+            //     if !self.is_editing {
+            //         self.show_help_popup = !self.show_help_popup
+            //     }
+            // },
+            _ => match self.current_window {
+                CurrentWindow::Workers => self.handle_workers_list_keys(key),
+                CurrentWindow::Info => self.handle_worker_info_keys(key),
             },
         }
     }
@@ -176,23 +261,24 @@ impl App {
     fn handle_workers_list_keys(&mut self, key: KeyEvent) {
         match (key.modifiers, key.code) {
             (_, KeyCode::Char('a')) => {
-                self.workers_state.push(WorkerState::default());
+                self.workers_info_state.push(WorkerState::default());
+                self.workers.push(WorkerRx::default());
                 if self.worker_list_state.selected() == None {
                     self.worker_list_state.select(Some(0));
                 }
-            },
+            }
             (_, KeyCode::Down) => {
-                if self.workers_state.is_empty() {
+                if self.workers_info_state.is_empty() {
                     return;
                 }
-                if self.worker_list_state.selected() == Some(self.workers_state.len() - 1) {
+                if self.worker_list_state.selected() == Some(self.workers_info_state.len() - 1) {
                     self.worker_list_state.select_first();
                     return;
                 }
                 self.worker_list_state.select_next();
-            },
+            }
             (_, KeyCode::Up) => {
-                if self.workers_state.is_empty() {
+                if self.workers_info_state.is_empty() {
                     return;
                 }
                 if self.worker_list_state.selected() == Some(0) {
@@ -200,44 +286,88 @@ impl App {
                     return;
                 }
                 self.worker_list_state.select_previous();
-            },
+            }
             (_, KeyCode::Char('d')) | (_, KeyCode::Delete) => {
                 if let Some(sel) = self.worker_list_state.selected() {
-                    self.workers_state.remove(sel);
+                    self.workers_info_state.remove(sel);
+                    self.workers.remove(sel);
                 }
-            },
+            }
             _ => {}
         }
     }
 
-    fn handle_worker_info_keys(&mut self, key: KeyEvent){
+    fn handle_worker_info_keys(&mut self, key: KeyEvent) {
         if let Some(sel) = self.worker_list_state.selected() {
             if self.is_editing {
-                self.workers_state[sel].handle_editing(key, &mut self.is_editing);
+                self.workers_info_state[sel].handle_editing(key, &mut self.is_editing);
             } else {
-                self.workers_state[sel].handle_keys(key, &mut self.is_editing);
+                self.workers_info_state[sel].handle_keys(key, &mut self.is_editing);
+
+                if self.workers_info_state[sel].do_build {
+                    if let WorkerType::Builder(builder) = &mut self.workers[sel].worker_type {
+                        let builder_clone = builder
+                            .clone()
+                            .recursive(
+                                self.workers_info_state[sel]
+                                    .properties
+                                    .recursion
+                                    .parse()
+                                    .unwrap(),
+                            )
+                            .threads(
+                                self.workers_info_state[sel]
+                                    .properties
+                                    .threads
+                                    .parse()
+                                    .unwrap(),
+                            )
+                            .timeout(
+                                self.workers_info_state[sel]
+                                    .properties
+                                    .timeout
+                                    .parse()
+                                    .unwrap(),
+                            )
+                            .uri(&self.workers_info_state[sel].properties.uri)
+                            .wordlist(&self.workers_info_state[sel].properties.wordlist_path);
+
+                        let worker_result = builder_clone.build();
+                        match worker_result {
+                            Ok(worker) => {
+                                self.workers[sel].worker_type =
+                                    WorkerType::Worker(thread::spawn(move || worker.run()));
+                                self.workers_info_state[sel].worker = WorkerVariant::Worker;
+                            }
+                            Err(err) => {
+                                self.builder_error = Some(err.clone());
+                                println!("{:?}", err)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
-    
+
     fn render_help_popup(&mut self, frame: &mut Frame) {
         let help_message = match self.current_window {
-                CurrentWindow::Workers => Text::from(vec![
-                    Line::from(""),
-                    Line::from("<TAB>".bold().blue() + " - Switch Tabs".into()),
-                    Line::from("<a>".bold().blue() + " - Add Worker".into()),
-                    Line::from("<d>".bold().blue() + " - Delete Worker".into()),
-                    Line::from("<r>".bold().blue() + " - Rename Worker".into()),
-                    Line::from("<Enter>".bold().blue() + " - Start/Stop worker".into()),
-                ]),
-                CurrentWindow::Info => Text::from(vec![
-                    Line::from(""),
-                    Line::from(" <TAB> ".bold().blue() + " - Switch tabs".into()),
-                    Line::from(" (No other actions)"),
-                ]),
-            };
-            let popup = Popup::new(" Help ".to_string(), help_message);
-            frame.render_widget(popup, frame.area());
+            CurrentWindow::Workers => Text::from(vec![
+                Line::from(""),
+                Line::from("<TAB>".bold().blue() + " - Switch Tabs".into()),
+                Line::from("<a>".bold().blue() + " - Add Worker".into()),
+                Line::from("<d>".bold().blue() + " - Delete Worker".into()),
+                Line::from("<r>".bold().blue() + " - Rename Worker".into()),
+                Line::from("<Enter>".bold().blue() + " - Start/Stop worker".into()),
+            ]),
+            CurrentWindow::Info => Text::from(vec![
+                Line::from(""),
+                Line::from(" <TAB> ".bold().blue() + " - Switch tabs".into()),
+                Line::from(" (No other actions)"),
+            ]),
+        };
+        let popup = Popup::new(" Help ".to_string(), help_message);
+        frame.render_widget(popup, frame.area());
     }
 
     /// Set running to false to quit the application.

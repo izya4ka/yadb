@@ -19,7 +19,7 @@ pub enum WorkerError {
     RequestError(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Worker {
     threads: usize,
     recursion_depth: usize,
