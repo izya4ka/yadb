@@ -9,8 +9,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{self, Constraint, Flex, Layout, Rect},
     style::{Style, Stylize},
-    text::Text,
-    widgets::{Block, Borders, Paragraph, StatefulWidget, Widget},
+    text::{Line, Text},
+    widgets::{Block, Borders, Clear, Gauge, Paragraph, StatefulWidget, Widget},
 };
 
 use crate::lib::worker::{
@@ -68,10 +68,11 @@ pub struct WorkerState {
     pub worker: WorkerVariant,
     currently_editing: Option<Field>,
     selected: Field,
+    pub current_parsing: String,
     pub properties: WorkerProperties,
     pub log: VecDeque<String>,
     pub messages: VecDeque<String>,
-    pub progress_max: usize,
+    pub progress_total: usize,
     pub progress_current: usize,
     pub do_build: bool,
 }
@@ -83,11 +84,12 @@ impl Default for WorkerState {
             worker: Default::default(),
             currently_editing: Default::default(),
             selected: Default::default(),
+            current_parsing: Default::default(),
             properties: Default::default(),
             log: Default::default(),
             messages: Default::default(),
-            progress_max: Default::default(),
-            progress_current: Default::default(),
+            progress_total: 1,
+            progress_current: 0,
             do_build: Default::default(),
         }
     }
@@ -107,21 +109,43 @@ impl StatefulWidget for WorkerInfo {
     ) {
         match &state.worker {
             WorkerVariant::Worker => {
-                let layout: [Rect; 3] = Layout::new(
+                let layout: [Rect; 4] = Layout::new(
                     layout::Direction::Vertical,
-                    [Constraint::Min(10), Constraint::Min(50), Constraint::Max(4)],
+                    [
+                        Constraint::Min(10),
+                        Constraint::Min(30),
+                        Constraint::Max(3),
+                        Constraint::Max(10),
+                    ],
                 )
                 .areas(area);
 
                 let log_block = Block::new().borders(Borders::all()).title(" Logs ");
                 let message_block = Block::new().borders(Borders::all()).title(" Results ");
+                let current_block = Block::new()
+                    .borders(Borders::all())
+                    .title(" Currently requesting ");
 
-                Paragraph::new(Text::from_iter(state.log.clone()))
+                let log_lines = state.log.iter().map(|s| Line::from(s.as_str()));
+                let message_lines = state.messages.iter().map(|s| Line::from(s.as_str()));
+
+                Paragraph::new(Text::from_iter(log_lines))
                     .block(log_block)
                     .render(layout[0], buf);
-                Paragraph::new(Text::from_iter(state.messages.clone()))
+
+                Paragraph::new(Text::from_iter(message_lines))
                     .block(message_block)
                     .render(layout[1], buf);
+                
+                Paragraph::new(Line::from(state.current_parsing.as_str()))
+                    .block(current_block)
+                    .render(layout[2], buf);
+
+                Gauge::default()
+                    .block(Block::bordered().title("Progress"))
+                    .gauge_style(Style::new().white().on_black().italic())
+                    .ratio((state.progress_current as f64) / (state.progress_total as f64))
+                    .render(layout[3], buf);
             }
             WorkerVariant::Builder => {
                 let layout: [Rect; 7] = Layout::new(

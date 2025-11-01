@@ -98,27 +98,29 @@ impl App {
                                     match progress_change_message {
                                         crate::lib::worker::messages::ProgressChangeMessage::SetMessage(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::SetSize(size) => {
-                                            self.workers_info_state[sel].progress_max = size;
+                                            self.workers_info_state[sel].progress_total = size;
                                         },
                                         crate::lib::worker::messages::ProgressChangeMessage::Start(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Advance => {
                                             self.workers_info_state[sel].progress_current += 1;
                                         },
-                                        crate::lib::worker::messages::ProgressChangeMessage::Print(str) => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::Print(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Finish => {},
                                     }
                                 },
                                 ProgressMessage::Current(progress_change_message) => {
                                     match progress_change_message {
-                                        crate::lib::worker::messages::ProgressChangeMessage::SetMessage(_) => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::SetMessage(str) => {
+                                            self.workers_info_state[sel].current_parsing = str;
+                                        },
                                         crate::lib::worker::messages::ProgressChangeMessage::SetSize(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Start(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Advance => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Print(msg) => {
-                                            let logs = &mut self.workers_info_state[sel].log;
-                                            logs.push_back(msg);
-                                            if logs.len() > LOG_MAX {
-                                                logs.pop_front();
+                                            let messages = &mut self.workers_info_state[sel].messages;
+                                            messages.push_back(msg);
+                                            if messages.len() > MESSAGES_MAX {
+                                                messages.pop_front();
                                             }
                                         },
                                         crate::lib::worker::messages::ProgressChangeMessage::Finish => {},
@@ -126,11 +128,17 @@ impl App {
                                 },
                             }
                         },
-                        WorkerMessage::Log(_, str) => {
-                            let messages = &mut self.workers_info_state[sel].messages;
-                            messages.push_front(str);
-                            if messages.len() > MESSAGES_MAX {
-                                messages.pop_front();
+                        WorkerMessage::Log(loglevel, str) => {
+                            
+                            let log = &mut self.workers_info_state[sel].log;
+                            match loglevel {
+                                crate::lib::logger::traits::LogLevel::WARN => log.push_front("[WARN] ".to_owned() + &str),
+                                crate::lib::logger::traits::LogLevel::ERROR => log.push_front("[ERROR] ".to_owned() + &str),
+                                crate::lib::logger::traits::LogLevel::CRITICAL => log.push_front("[CRITICAL]".to_owned() + &str),
+                                _ => {},
+                            }
+                            if log.len() > LOG_MAX {
+                                log.pop_front();
                             }
                         },
                     }
@@ -178,7 +186,7 @@ impl App {
         }
 
         let block_list_inner = block_list.inner(rect_list);
-        let block_info_inner = block_list.inner(rect_info);
+        let block_info_inner = block_info.inner(rect_info);
 
         frame.render_widget(block_list, rect_list);
         frame.render_widget(block_info, rect_info);
@@ -218,7 +226,7 @@ impl App {
     /// Reads the crossterm events and updates the state of [`App`].
     fn handle_crossterm_events(&mut self) -> Result<()> {
         // 90 FPS
-        if event::poll(Duration::from_millis(12))? {
+        if event::poll(Duration::from_millis(40))? {
             match event::read()? {
                 // it's important to check KeyEventKind::Press to avoid handling key release events
                 Event::Key(key) if key.kind == KeyEventKind::Press => self.on_key_event(key),
@@ -341,6 +349,7 @@ impl App {
                             }
                             Err(err) => {
                                 self.builder_error = Some(err.clone());
+                                self.workers_info_state[sel].do_build = false;
                                 println!("{:?}", err)
                             }
                         }

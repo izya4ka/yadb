@@ -175,12 +175,12 @@ impl Worker {
                                 //     style(&url).red()
                                 // ));
                                 message_sender
-                                    .send(WorkerMessage::Progress(ProgressMessage::Current(
-                                        ProgressChangeMessage::Print(format!(
+                                    .send(WorkerMessage::Log(LogLevel::WARN,
+                                        format!(
                                             "Error while sending request to {}: {e}",
                                             style(&url).red()
                                         )),
-                                    )))
+                                    )
                                     .expect("SENDER ERROR")
                             }
                         }
