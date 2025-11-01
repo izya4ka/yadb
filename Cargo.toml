@@ -21,7 +21,7 @@ ureq = "3.0.12"
 ratatui = "0.29.0"
 color-eyre = "0.6.5"
 crossterm = "0.29.0"
-
+tui-input = { version = "*", features = ["crossterm"], default-features = false }
 
 [profile.dev]
 opt-level = 0

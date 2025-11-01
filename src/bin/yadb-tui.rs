@@ -1,4 +1,4 @@
-use yadb::lib::tui::App;
+use yadb::lib::tui::tui::App;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;

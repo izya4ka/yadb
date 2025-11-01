@@ -9,7 +9,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use yadb::lib::{
     logger::{
         file_logger::FileLogger,
-        traits::{BusterLogger, NullLogger},
+        traits::{WorkerLogger, NullLogger},
     },
     util, worker::{builder::WorkerBuilder, messages::{WorkerMessage, ProgressChangeMessage, ProgressMessage}},
 };
@@ -84,14 +84,14 @@ fn main() {
 
     let logger = if let Some(output) = args.output {
         match FileLogger::new(output) {
-            Ok(log) => BusterLogger::FileLogger(Mutex::new(log)),
+            Ok(log) => WorkerLogger::FileLogger(Mutex::new(log)),
             Err(err) => {
                 println!("Error: {err}");
                 return;
             }
         }
     } else {
-        BusterLogger::NullLogger(NullLogger::default())
+        WorkerLogger::NullLogger(NullLogger::default())
     };
 
     let (tx, rx) = mpsc::channel::<WorkerMessage>();

@@ -14,7 +14,7 @@ use crate::lib::logger::traits::LogLevel;
 use crate::lib::worker::messages::{WorkerMessage, ProgressChangeMessage, ProgressMessage};
 
 #[derive(Error, Debug, Clone)]
-pub enum BusterError {
+pub enum WorkerError {
     #[error("Request error: {0}")]
     RequestError(String),
 }
@@ -105,7 +105,7 @@ impl Worker {
         let client = Arc::new(agent);
 
         thread::scope(|s| {
-            let mut threads: Vec<ScopedJoinHandle<Result<Vec<Url>, BusterError>>> = Vec::new();
+            let mut threads: Vec<ScopedJoinHandle<Result<Vec<Url>, WorkerError>>> = Vec::new();
 
             for thr in 0..self.threads {
                 let words = lines_arc.clone();

@@ -10,7 +10,7 @@ pub enum LogLevel {
 }
 
 #[derive(Debug)]
-pub enum BusterLogger {
+pub enum WorkerLogger {
     NullLogger(NullLogger),
     FileLogger(Mutex<FileLogger>),
 }
@@ -25,11 +25,11 @@ impl Logger for NullLogger {
     fn log(&self, _level: LogLevel, _msg: String) {}
 }
 
-impl BusterLogger {
+impl WorkerLogger {
     pub fn log(&self, level: LogLevel, msg: String) {
         match self {
-            BusterLogger::NullLogger(logger) => logger.log(level, msg),
-            BusterLogger::FileLogger(logger) => logger.lock().unwrap().log(level, msg),
+            WorkerLogger::NullLogger(logger) => logger.log(level, msg),
+            WorkerLogger::FileLogger(logger) => logger.lock().unwrap().log(level, msg),
         }
     }
 }

@@ -6,9 +6,9 @@ use url::{ParseError, Url};
 
 use crate::lib::worker::{messages::WorkerMessage, worker::Worker};
 
-const DEFAULT_THREADS_NUMBER: usize = 50;
-const DEFAULT_RECURSIVE_MODE: usize = 0;
-const DEFAULT_TIMEOUT: usize = 5;
+pub const DEFAULT_THREADS_NUMBER: usize = 50;
+pub const DEFAULT_RECURSIVE_MODE: usize = 0;
+pub const DEFAULT_TIMEOUT: usize = 5;
 
 #[derive(Error, Debug, Clone)]
 pub enum BuilderError {
@@ -37,13 +37,14 @@ pub enum BuilderError {
     SenderChannelNotSpecified
 }
 
+#[derive(Debug)]
 pub struct WorkerBuilder
 {
-    threads: Option<usize>,
-    recursion: Option<usize>,
-    timeout: Option<usize>,
-    wordlist: Option<PathBuf>,
-    uri: Option<Url>,
+    pub threads: Option<usize>,
+    pub recursion: Option<usize>,
+    pub timeout: Option<usize>,
+    pub wordlist: Option<PathBuf>,
+    pub uri: Option<Url>,
     error: Option<BuilderError>,
     message_sender: Option<Arc<Sender<WorkerMessage>>>,
 }
