@@ -1,26 +1,16 @@
-use std::{
-    collections::VecDeque,
-    default,
-    sync::mpsc::{self, Receiver},
-    thread,
-};
+use std::collections::VecDeque;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{self, Constraint, Flex, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Text},
-    widgets::{Block, Borders, Clear, Gauge, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, Borders, Gauge, Paragraph, StatefulWidget, Widget},
 };
 
-use crate::lib::worker::{
-    builder::{
-        BuilderError, DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT,
-        WorkerBuilder,
-    },
-    messages::WorkerMessage,
-    worker::Worker,
-};
+use crate::lib::worker::builder::{
+        DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT,
+    };
 
 #[derive(Debug, Default, Clone)]
 pub enum WorkerVariant {
@@ -37,7 +27,7 @@ pub enum Field {
     Recursion,
     Timeout,
     WordlistPath,
-    URI,
+    Uri,
     RunButton,
 }
 
@@ -209,7 +199,7 @@ impl StatefulWidget for WorkerInfo {
                         wordlist_path_block =
                             wordlist_path_block.border_style(Style::default().red())
                     }
-                    Field::URI => uri_block = uri_block.border_style(Style::default().red()),
+                    Field::Uri => uri_block = uri_block.border_style(Style::default().red()),
                     Field::RunButton => {
                         run_button = run_button.border_style(Style::default().green())
                     }
@@ -224,7 +214,7 @@ impl StatefulWidget for WorkerInfo {
                         Field::WordlistPath => {
                             wordlist_path_paragraph = wordlist_path_paragraph.italic()
                         }
-                        Field::URI => uri_paragraph = uri_paragraph.italic(),
+                        Field::Uri => uri_paragraph = uri_paragraph.italic(),
                         _ => {}
                     }
                 }
@@ -274,8 +264,8 @@ impl WorkerState {
             },
             WorkerVariant::Builder => match (key.modifiers, key.code) {
                 (_, KeyCode::Down) => match &self.selected {
-                    Field::Name => self.selected = Field::URI,
-                    Field::URI => self.selected = Field::Threads,
+                    Field::Name => self.selected = Field::Uri,
+                    Field::Uri => self.selected = Field::Threads,
                     Field::Threads => self.selected = Field::Recursion,
                     Field::Recursion => self.selected = Field::Timeout,
                     Field::Timeout => self.selected = Field::WordlistPath,
@@ -284,8 +274,8 @@ impl WorkerState {
                 },
                 (_, KeyCode::Up) => match &self.selected {
                     Field::Name => self.selected = Field::RunButton,
-                    Field::URI => self.selected = Field::Name,
-                    Field::Threads => self.selected = Field::URI,
+                    Field::Uri => self.selected = Field::Name,
+                    Field::Threads => self.selected = Field::Uri,
                     Field::Recursion => self.selected = Field::Threads,
                     Field::Timeout => self.selected = Field::Recursion,
                     Field::WordlistPath => self.selected = Field::Timeout,
@@ -308,42 +298,39 @@ impl WorkerState {
     pub fn handle_editing(&mut self, key: KeyEvent, is_editing: &mut bool) {
         match (key.modifiers, key.code) {
             (_, KeyCode::Char(ch)) => {
-                match &self.currently_editing {
-                    Some(field) => match field {
+                if let Some(field) = &self.currently_editing { match field {
                         Field::Name => self.name.push(ch),
                         Field::Threads => {
-                            if ch.is_digit(10) {
+                            if ch.is_ascii_digit() {
                                 self.properties.threads.push(ch)
                             }
                         }
                         Field::Recursion => {
-                            if ch.is_digit(10) {
+                            if ch.is_ascii_digit() {
                                 self.properties.recursion.push(ch);
                             }
                         }
                         Field::Timeout => {
-                            if ch.is_digit(10) {
+                            if ch.is_ascii_digit() {
                                 self.properties.timeout.push(ch);
                             }
                         }
                         Field::WordlistPath => self.properties.wordlist_path.push(ch),
-                        Field::URI => self.properties.uri.push(ch),
+                        Field::Uri => self.properties.uri.push(ch),
                         Field::RunButton => {}
-                    },
-                    _ => {}
-                };
+                    }
+                }
             }
-            (_, KeyCode::Backspace) => match &self.currently_editing {
-                Some(field) => match field {
+            (_, KeyCode::Backspace) => if let Some(field) = &self.currently_editing {
+                match field {
                     Field::Name => _ = self.name.pop(),
                     Field::Threads => _ = self.properties.threads.pop(),
                     Field::Recursion => _ = self.properties.recursion.pop(),
                     Field::Timeout => _ = self.properties.timeout.pop(),
                     Field::WordlistPath => _ = self.properties.wordlist_path.pop(),
-                    Field::URI => _ = self.properties.uri.pop(),
-                    Field::RunButton => {}
-                },
-                _ => {}
+                    Field::Uri => _ = self.properties.uri.pop(),
+                    Field::RunButton => {},
+                }
             },
             (_, KeyCode::Enter) | (_, KeyCode::Esc) => {
                 *is_editing = false;

@@ -7,14 +7,11 @@
 ![WindowsTerminal_XzDicVjS7F-ezgif com-cut](https://github.com/user-attachments/assets/45368b2d-0616-40e4-9eec-5fb33ab9d9b6)
 
 
-**YADB** is a fast and safe directory brute-forcing tool written in **Rust**, inspired by `gobuster`.
+**YADB** is a directory brute-forcing tool written in **Rust**, inspired by `gobuster`.
 
 ## ✨ Features
 - ⚡ **High performance** with multithreading
-- 🖥️ **CLI interface** (GUI — coming soon)
-- 📝 **Logging** to file and stdout
-- 📊 **Progress bar** for real-time feedback
-- 🔒 **Safety** — robust error handling and thread safety
+- 🖥️ **CLI and TUI interface**
 
 ## 📦 Installation
 ```bash
@@ -22,6 +19,8 @@ cargo install yadb
 ```
 
 ## 🚀 Usage
+
+### CLI
 
 ```
 Usage: yadb-cli [OPTIONS] --wordlist <WORDLIST> --uri <URI>
@@ -36,13 +35,19 @@ Options:
   -V, --version                Print version
 ```
 
+### TUI
+Just simply:
+```
+yadb-tui
+```
+
 ## 🛠️ TODO
 
 - [x] CLI interface
 - [x] Recursion
-- [ ] TUI interface
+- [x] TUI interface
 - [ ] Output in HTML/JSON formats
-- [ ] Automatic wordlist updates
+- [ ] Better TUI :)
 
 ## 🙌 Contributions
 Contributions are welcome! If you have ideas for improvements, bug fixes, or new features, feel free to open an issue or submit a pull request.

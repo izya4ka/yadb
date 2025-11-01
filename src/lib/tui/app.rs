@@ -1,9 +1,8 @@
-use anyhow::Result as AnyResult;
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
     DefaultTerminal, Frame,
-    layout::{Constraint, Direction, Flex, Layout, Rect},
+    layout::{Constraint, Direction, Layout},
     style::{Style, Stylize},
     text::{Line, Text},
     widgets::{Block, BorderType, Borders, List, ListItem, ListState},
@@ -11,7 +10,7 @@ use ratatui::{
 use strip_ansi_escapes::strip_str;
 use std::{
     sync::mpsc::{self, Receiver},
-    thread::{self, JoinHandle},
+    thread::{self},
     time::Duration,
 };
 
@@ -23,7 +22,6 @@ use crate::lib::{
     worker::{
         builder::{BuilderError, WorkerBuilder},
         messages::{ProgressMessage, WorkerMessage},
-        worker::Worker,
     },
 };
 
@@ -272,7 +270,7 @@ impl App {
             (_, KeyCode::Char('a')) => {
                 self.workers_info_state.push(WorkerState::default());
                 self.workers.push(WorkerRx::default());
-                if self.worker_list_state.selected() == None {
+                if self.worker_list_state.selected().is_none(){
                     self.worker_list_state.select(Some(0));
                 }
             }
@@ -351,7 +349,6 @@ impl App {
                             Err(err) => {
                                 self.builder_error = Some(err.clone());
                                 self.workers_info_state[sel].do_build = false;
-                                println!("{:?}", err)
                             }
                         }
                     }
@@ -363,17 +360,15 @@ impl App {
     fn render_help_popup(&mut self, frame: &mut Frame) {
         let help_message = match self.current_window {
             CurrentWindow::Workers => Text::from(vec![
-                Line::from(""),
-                Line::from("<TAB>".bold().blue() + " - Switch Tabs".into()),
-                Line::from("<a>".bold().blue() + " - Add Worker".into()),
-                Line::from("<d>".bold().blue() + " - Delete Worker".into()),
-                Line::from("<r>".bold().blue() + " - Rename Worker".into()),
-                Line::from("<Enter>".bold().blue() + " - Start/Stop worker".into()),
+                "<TAB>".bold().blue() + " - Switch Tabs".into(),
+                "<a>".bold().blue() + " - Add Worker".into(),
+                "<d>".bold().blue() + " - Delete Worker".into(),
+                "<r>".bold().blue() + " - Rename Worker".into(),
+                "<Enter>".bold().blue() + " - Start/Stop worker".into(),
             ]),
             CurrentWindow::Info => Text::from(vec![
-                Line::from(""),
-                Line::from(" <TAB> ".bold().blue() + " - Switch tabs".into()),
-                Line::from(" (No other actions)"),
+                " <TAB> ".bold().blue() + " - Switch tabs".into(),
+                " (No other actions)".into(),
             ]),
         };
         let popup = Popup::new(" Help ".to_string(), help_message);

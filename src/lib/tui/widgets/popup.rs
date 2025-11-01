@@ -22,7 +22,7 @@ impl<'a> Widget for Popup<'a> {
                 .title(title);
 
             let text = Paragraph::new(self.content).centered().block(block);
-            Clear::default().render(area, buf);
+            Clear.render(area, buf);
             text.render(area, buf);
     }
 }
