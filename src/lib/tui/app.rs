@@ -102,6 +102,7 @@ impl App {
                                         crate::lib::worker::messages::ProgressChangeMessage::Print(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Finish => {
                                             self.workers_info_state[sel].current_parsing = "Done!".to_string();
+                                            self.workers_info_state[sel].worker = WorkerVariant::Done;
                                         },
                                     }
                                 },
@@ -197,12 +198,11 @@ impl App {
                 match self.workers_info_state[i].worker {
                     WorkerVariant::Worker => cloned_name = "<RUN> ".to_owned() + &cloned_name,
                     WorkerVariant::Builder => cloned_name = "<WAIT> ".to_owned() + &cloned_name,
-                };
+                    WorkerVariant::Done => cloned_name = "<DONE> ".to_owned() + &cloned_name,
+                                    };
                 let mut item = ListItem::new(cloned_name);
-                if let Some(selected_index) = self.worker_list_state.selected() {
-                    if selected_index == i {
-                        item = item.reversed().blue();
-                    }
+                if let Some(selected_index) = self.worker_list_state.selected() && selected_index == i  {
+                    item = item.reversed().blue();
                 }
                 item
             })
@@ -321,8 +321,8 @@ impl App {
             } else {
                 self.workers_info_state[sel].handle_keys(key, &mut self.is_editing);
 
-                if self.workers_info_state[sel].do_build {
-                    if let WorkerType::Builder(builder) = &mut self.workers[sel].worker_type {
+                if self.workers_info_state[sel].do_build
+                    && let WorkerType::Builder(builder) = &mut self.workers[sel].worker_type {
                         let builder_clone = builder
                             .clone()
                             .recursive(
@@ -362,7 +362,6 @@ impl App {
                                 self.workers_info_state[sel].do_build = false;
                             }
                         }
-                    }
                 }
             }
         }

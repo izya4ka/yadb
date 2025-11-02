@@ -17,6 +17,7 @@ pub enum WorkerVariant {
     Worker,
     #[default]
     Builder,
+    Done
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -126,7 +127,7 @@ impl StatefulWidget for WorkerInfo {
                 Paragraph::new(Text::from_iter(message_lines))
                     .block(message_block)
                     .render(layout[1], buf);
-                
+    
                 Paragraph::new(Line::from(state.current_parsing.as_str()))
                     .block(current_block)
                     .render(layout[2], buf);
@@ -242,6 +243,7 @@ impl StatefulWidget for WorkerInfo {
                         buf,
                     );
             }
+        WorkerVariant::Done => {},
         }
     }
 }
@@ -298,6 +300,7 @@ impl WorkerState {
                 },
                 _ => {}
             },
+            WorkerVariant::Done => {},
         }
     }
 
