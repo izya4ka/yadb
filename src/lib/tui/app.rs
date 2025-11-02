@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders, List, ListItem, ListState},
 };
 use std::{
-    clone, sync::mpsc::{self, Receiver}, thread::{self}, time::Duration
+    sync::mpsc::{self, Receiver}, thread::{self}, time::Duration
 };
 
 use crate::lib::{
@@ -257,8 +257,8 @@ impl App {
                 }
             },
             _ => {
-                if self.show_help_popup || self.builder_error.is_some() {
-                    if key.code == KeyCode::Enter {
+                if (self.show_help_popup || self.builder_error.is_some()) && key.code == KeyCode::Enter {
+                     {
                         self.show_help_popup = false;
                         self.builder_error = None;
                     }
