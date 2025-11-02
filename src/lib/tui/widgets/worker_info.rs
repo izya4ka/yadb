@@ -8,16 +8,15 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, Paragraph, StatefulWidget, Widget},
 };
 
-use crate::lib::worker::builder::{
+use crate::lib::{tui::app::{LOG_MAX, MESSAGES_MAX}, worker::builder::{
         DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT,
-    };
+    }};
 
 #[derive(Debug, Default, Clone)]
 pub enum WorkerVariant {
-    Worker,
+    Worker(bool),
     #[default]
     Builder,
-    Done
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -99,14 +98,14 @@ impl StatefulWidget for WorkerInfo {
         state: &mut Self::State,
     ) {
         match &state.worker {
-            WorkerVariant::Worker => {
+            WorkerVariant::Worker(_) => {
                 let layout: [Rect; 4] = Layout::new(
                     layout::Direction::Vertical,
                     [
-                        Constraint::Min(10),
-                        Constraint::Min(30),
+                        Constraint::Min((LOG_MAX + 2).try_into().unwrap()),
+                        Constraint::Min((MESSAGES_MAX + 2).try_into().unwrap()),
                         Constraint::Max(3),
-                        Constraint::Max(10),
+                        Constraint::Max(3),
                     ],
                 )
                 .areas(area);
@@ -243,7 +242,6 @@ impl StatefulWidget for WorkerInfo {
                         buf,
                     );
             }
-        WorkerVariant::Done => {},
         }
     }
 }
@@ -262,7 +260,7 @@ impl WorkerState {
     pub fn handle_keys(&mut self, key: KeyEvent, is_editing: &mut bool) {
 
         match self.worker {
-            WorkerVariant::Worker => match (key.modifiers, key.code) {
+            WorkerVariant::Worker(_) => match (key.modifiers, key.code) {
                 _ => {}
             },
             WorkerVariant::Builder => match (key.modifiers, key.code) {
@@ -300,7 +298,6 @@ impl WorkerState {
                 },
                 _ => {}
             },
-            WorkerVariant::Done => {},
         }
     }
 

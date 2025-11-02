@@ -22,8 +22,8 @@ use crate::lib::{
     },
 };
 
-const LOG_MAX: usize = 5;
-const MESSAGES_MAX: usize = 30;
+pub const LOG_MAX: usize = 5;
+pub const MESSAGES_MAX: usize = 30;
 
 #[derive(Debug, Default, PartialEq)]
 enum CurrentWindow {
@@ -102,7 +102,7 @@ impl App {
                                         crate::lib::worker::messages::ProgressChangeMessage::Print(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Finish => {
                                             self.workers_info_state[sel].current_parsing = "Done!".to_string();
-                                            self.workers_info_state[sel].worker = WorkerVariant::Done;
+                                            self.workers_info_state[sel].worker = WorkerVariant::Worker(true);
                                         },
                                     }
                                 },
@@ -196,10 +196,11 @@ impl App {
             .map(|(i, w)| {
                 let mut cloned_name = w.name.clone();
                 match self.workers_info_state[i].worker {
-                    WorkerVariant::Worker => cloned_name = "<RUN> ".to_owned() + &cloned_name,
+                    WorkerVariant::Worker(s) if !s => cloned_name = "<RUN> ".to_owned() + &cloned_name,
+                    WorkerVariant::Worker(s) if s => cloned_name = "<DONE> ".to_owned() + &cloned_name,
                     WorkerVariant::Builder => cloned_name = "<WAIT> ".to_owned() + &cloned_name,
-                    WorkerVariant::Done => cloned_name = "<DONE> ".to_owned() + &cloned_name,
-                                    };
+                    _ => {}
+                };
                 let mut item = ListItem::new(cloned_name);
                 if let Some(selected_index) = self.worker_list_state.selected() && selected_index == i  {
                     item = item.reversed().blue();
@@ -319,6 +320,12 @@ impl App {
             if self.is_editing {
                 self.workers_info_state[sel].handle_editing(key, &mut self.is_editing);
             } else {
+
+                if key.code == KeyCode::Char('h') {
+                    self.show_help_popup = !self.show_help_popup;
+                    return;
+                }
+
                 self.workers_info_state[sel].handle_keys(key, &mut self.is_editing);
 
                 if self.workers_info_state[sel].do_build
@@ -354,7 +361,7 @@ impl App {
                             Ok(worker) => {
                                 self.workers[sel].worker_type = WorkerType::Worker;
                                 thread::spawn(move || worker.run());
-                                self.workers_info_state[sel].worker = WorkerVariant::Worker;
+                                self.workers_info_state[sel].worker = WorkerVariant::Worker(false);
                                 self.is_editing = false;
                             }
                             Err(err) => {
