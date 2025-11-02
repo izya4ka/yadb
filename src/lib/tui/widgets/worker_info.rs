@@ -62,8 +62,10 @@ pub struct WorkerState {
     pub properties: WorkerProperties,
     pub log: VecDeque<String>,
     pub messages: VecDeque<String>,
-    pub progress_total: usize,
-    pub progress_current: usize,
+    pub progress_current_total: usize,
+    pub progress_current_now: usize,
+    pub progress_all_total: usize,
+    pub progress_all_now: usize,
     pub do_build: bool,
 }
 
@@ -78,9 +80,11 @@ impl Default for WorkerState {
             properties: Default::default(),
             log: Default::default(),
             messages: Default::default(),
-            progress_total: 1,
-            progress_current: 0,
             do_build: Default::default(),
+            progress_current_total: 1,
+            progress_current_now: 0,
+            progress_all_total: 1,
+            progress_all_now: 0,
         }
     }
 }
@@ -99,16 +103,34 @@ impl StatefulWidget for WorkerInfo {
     ) {
         match &state.worker {
             WorkerVariant::Worker(_) => {
-                let layout: [Rect; 4] = Layout::new(
+                let layout: [Rect; 5] = Layout::new(
                     layout::Direction::Vertical,
                     [
-                        Constraint::Min((LOG_MAX + 2).try_into().unwrap()),
+                        Constraint::Length((LOG_MAX + 2).try_into().unwrap()),
                         Constraint::Min((MESSAGES_MAX + 2).try_into().unwrap()),
-                        Constraint::Max(3),
-                        Constraint::Max(3),
+                        Constraint::Length(3),
+                        Constraint::Length(3),
+                        Constraint::Length(3),
                     ],
                 )
                 .areas(area);
+
+                let args_and_log_layout: [Rect; 2] = Layout::new(layout::Direction::Horizontal, [
+                    Constraint::Percentage(30),
+                    Constraint::Percentage(70),
+                ]).areas(layout[0]);
+
+                let args_block = Block::new()
+                    .borders(Borders::all())
+                    .title(" Arguments ");
+
+                Paragraph::new(Text::from_iter::<[Line; 5]>([
+                    Line::from("URI: ") + state.properties.uri.clone().blue(),
+                    Line::from("Threads: ") + state.properties.threads.clone().blue(),
+                    Line::from("Recursion depth: ") + state.properties.recursion.clone().blue(),
+                    Line::from("Timeout: ") + state.properties.timeout.clone().blue(),
+                    Line::from("Wordlist: ") + state.properties.wordlist_path.clone().blue(),
+                ])).block(args_block).render(args_and_log_layout[0], buf);
 
                 let log_block = Block::new().borders(Borders::all()).title(" Logs ");
                 let message_block = Block::new().borders(Borders::all()).title(" Results ");
@@ -121,7 +143,7 @@ impl StatefulWidget for WorkerInfo {
 
                 Paragraph::new(Text::from_iter(log_lines))
                     .block(log_block)
-                    .render(layout[0], buf);
+                    .render(args_and_log_layout[1], buf);
 
                 Paragraph::new(Text::from_iter(message_lines))
                     .block(message_block)
@@ -130,12 +152,20 @@ impl StatefulWidget for WorkerInfo {
                 Paragraph::new(Line::from(state.current_parsing.as_str()))
                     .block(current_block)
                     .render(layout[2], buf);
+                
+                if !state.properties.recursion.starts_with('0') {
+                    Gauge::default()
+                        .block(Block::bordered().title(" Current recursion progress "))
+                        .gauge_style(Style::new().white().on_black().italic())
+                        .ratio(checked_ratio(state.progress_current_now, state.progress_current_total))
+                        .render(layout[3], buf);
+                }
 
                 Gauge::default()
-                    .block(Block::bordered().title("Progress"))
-                    .gauge_style(Style::new().white().on_black().italic())
-                    .ratio((state.progress_current as f64) / (state.progress_total as f64))
-                    .render(layout[3], buf);
+                    .block(Block::bordered().title(" Total progress "))
+                    .gauge_style(Style::new().blue().on_black().italic())
+                    .ratio(checked_ratio(state.progress_all_now, state.progress_all_total))
+                    .render(layout[4], buf);
             }
             WorkerVariant::Builder => {
                 let layout: [Rect; 7] = Layout::new(
@@ -345,4 +375,13 @@ impl WorkerState {
             _ => {}
         }
     }
+}
+
+
+fn checked_ratio(a: usize, b: usize) -> f64 {
+    let res = a as f64 / b as f64;
+    if (0.0..=1.0).contains(&res) {
+        return res;
+    }
+    0.0
 }

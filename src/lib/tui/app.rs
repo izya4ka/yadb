@@ -23,7 +23,7 @@ use crate::lib::{
 };
 
 pub const LOG_MAX: usize = 5;
-pub const MESSAGES_MAX: usize = 30;
+pub const MESSAGES_MAX: usize = 20;
 
 #[derive(Debug, Default, PartialEq)]
 enum CurrentWindow {
@@ -93,11 +93,11 @@ impl App {
                                     match progress_change_message {
                                         crate::lib::worker::messages::ProgressChangeMessage::SetMessage(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::SetSize(size) => {
-                                            self.workers_info_state[sel].progress_total = size;
+                                            self.workers_info_state[sel].progress_all_total = size;
                                         },
                                         crate::lib::worker::messages::ProgressChangeMessage::Start(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Advance => {
-                                            self.workers_info_state[sel].progress_current += 1;
+                                            self.workers_info_state[sel].progress_all_now += 1;
                                         },
                                         crate::lib::worker::messages::ProgressChangeMessage::Print(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Finish => {
@@ -111,9 +111,14 @@ impl App {
                                         crate::lib::worker::messages::ProgressChangeMessage::SetMessage(str) => {
                                             self.workers_info_state[sel].current_parsing = str;
                                         },
-                                        crate::lib::worker::messages::ProgressChangeMessage::SetSize(_) => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::SetSize(size) => {
+                                            self.workers_info_state[sel].progress_current_now = 0;
+                                            self.workers_info_state[sel].progress_current_total = size;
+                                        },
                                         crate::lib::worker::messages::ProgressChangeMessage::Start(_) => {},
-                                        crate::lib::worker::messages::ProgressChangeMessage::Advance => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::Advance => {
+                                            self.workers_info_state[sel].progress_current_now += 1;
+                                        },
                                         crate::lib::worker::messages::ProgressChangeMessage::Print(msg) => {
                                             let messages = &mut self.workers_info_state[sel].messages;
                                             messages.push_back(msg);

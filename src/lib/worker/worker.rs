@@ -71,7 +71,7 @@ impl Worker {
                 .expect("SENDER ERROR");
 
             self.message_sender
-                .send(WorkerMessage::set_current_size(progress_len))
+                .send(WorkerMessage::set_current_size(lines_len))
                 .expect("SENDER ERROR");
 
             let urls_result = self.execute(url, lines)?;
@@ -80,9 +80,6 @@ impl Worker {
             urls_vec.extend(urls_result);
         }
 
-        self.message_sender
-            .send(WorkerMessage::finish_current())
-            .expect("SENDER ERROR");
         self.message_sender
             .send(WorkerMessage::finish_total())
             .expect("SENDER ERROR");

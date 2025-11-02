@@ -6,7 +6,7 @@ edition = "2024"
 readme = "README.md"
 repository = "https://github.com/izya4ka/yadb"
 license = "GPL-3.0"
-keywords = ["net", "scan", "web"]
+keywords = ["net", "scan", "web", "cli", "tui", "pentest"]
 default-run = "yadb-cli"
 
 [dependencies]
