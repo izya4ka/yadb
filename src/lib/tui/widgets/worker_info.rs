@@ -258,6 +258,7 @@ impl WorkerInfo {
 
 impl WorkerState {
     pub fn handle_keys(&mut self, key: KeyEvent, is_editing: &mut bool) {
+
         match self.worker {
             WorkerVariant::Worker => match (key.modifiers, key.code) {
                 _ => {}
@@ -281,15 +282,20 @@ impl WorkerState {
                     Field::WordlistPath => self.selected = Field::Timeout,
                     Field::RunButton => self.selected = Field::WordlistPath,
                 },
-                (_, KeyCode::Char('r')) => {
-                    self.currently_editing = Some(self.selected);
-                    *is_editing = true;
-                }
                 (_, KeyCode::Enter) => {
-                    if self.selected == Field::RunButton {
+
+                    *is_editing = !*is_editing;
+
+                    if *is_editing {
+                        self.currently_editing = Some(self.selected);
+                    } else {
+                        self.currently_editing = None;
+                    }
+
+                    if self.currently_editing == Some(Field::RunButton) {
                         self.do_build = true;
                     }
-                }
+                },
                 _ => {}
             },
         }
@@ -301,23 +307,23 @@ impl WorkerState {
                 if let Some(field) = &self.currently_editing { match field {
                         Field::Name => self.name.push(ch),
                         Field::Threads => {
-                            if ch.is_ascii_digit() {
-                                self.properties.threads.push(ch)
+                            if ch.is_ascii_digit() && !self.properties.threads.starts_with('0') {
+                                self.properties.threads.push(ch);
                             }
                         }
                         Field::Recursion => {
-                            if ch.is_ascii_digit() {
+                            if ch.is_ascii_digit() && !self.properties.recursion.starts_with('0') {
                                 self.properties.recursion.push(ch);
                             }
                         }
                         Field::Timeout => {
-                            if ch.is_ascii_digit() {
+                            if ch.is_ascii_digit() && !self.properties.timeout.starts_with('0') {
                                 self.properties.timeout.push(ch);
                             }
                         }
                         Field::WordlistPath => self.properties.wordlist_path.push(ch),
                         Field::Uri => self.properties.uri.push(ch),
-                        Field::RunButton => {}
+                        _ => {},
                     }
                 }
             }
@@ -329,12 +335,12 @@ impl WorkerState {
                     Field::Timeout => _ = self.properties.timeout.pop(),
                     Field::WordlistPath => _ = self.properties.wordlist_path.pop(),
                     Field::Uri => _ = self.properties.uri.pop(),
-                    Field::RunButton => {},
+                    _ => {},
                 }
             },
-            (_, KeyCode::Enter) | (_, KeyCode::Esc) => {
-                *is_editing = false;
+            (_, KeyCode::Enter) => {
                 self.currently_editing = None;
+                *is_editing = false;
             }
             _ => {}
         }

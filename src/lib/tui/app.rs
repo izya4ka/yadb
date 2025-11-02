@@ -7,11 +7,8 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, BorderType, Borders, List, ListItem, ListState},
 };
-use strip_ansi_escapes::strip_str;
 use std::{
-    sync::mpsc::{self, Receiver},
-    thread::{self},
-    time::Duration,
+    clone, sync::mpsc::{self, Receiver}, thread::{self}, time::Duration
 };
 
 use crate::lib::{
@@ -88,8 +85,7 @@ impl App {
             self.handle_crossterm_events()?;
 
             for (sel, worker_state) in self.workers.iter_mut().enumerate() {
-                let msg = worker_state.rx.try_recv();
-                if let Ok(msg) = msg {
+                if let Ok(msg) = worker_state.rx.try_recv() {
                     match msg {
                         WorkerMessage::Progress(progress_message) => {
                             match progress_message {
@@ -104,20 +100,22 @@ impl App {
                                             self.workers_info_state[sel].progress_current += 1;
                                         },
                                         crate::lib::worker::messages::ProgressChangeMessage::Print(_) => {},
-                                        crate::lib::worker::messages::ProgressChangeMessage::Finish => {},
+                                        crate::lib::worker::messages::ProgressChangeMessage::Finish => {
+                                            self.workers_info_state[sel].current_parsing = "Done!".to_string();
+                                        },
                                     }
                                 },
                                 ProgressMessage::Current(progress_change_message) => {
                                     match progress_change_message {
                                         crate::lib::worker::messages::ProgressChangeMessage::SetMessage(str) => {
-                                            self.workers_info_state[sel].current_parsing = strip_str(str);
+                                            self.workers_info_state[sel].current_parsing = str;
                                         },
                                         crate::lib::worker::messages::ProgressChangeMessage::SetSize(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Start(_) => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Advance => {},
                                         crate::lib::worker::messages::ProgressChangeMessage::Print(msg) => {
                                             let messages = &mut self.workers_info_state[sel].messages;
-                                            messages.push_back(strip_str(msg));
+                                            messages.push_back(msg);
                                             if messages.len() > MESSAGES_MAX {
                                                 messages.pop_front();
                                             }
@@ -131,9 +129,9 @@ impl App {
                             
                             let log = &mut self.workers_info_state[sel].log;
                             match loglevel {
-                                crate::lib::logger::traits::LogLevel::WARN => log.push_front("[WARN] ".to_owned() + &strip_str(str)),
-                                crate::lib::logger::traits::LogLevel::ERROR => log.push_front("[ERROR] ".to_owned() + &strip_str(str)),
-                                crate::lib::logger::traits::LogLevel::CRITICAL => log.push_front("[CRITICAL]".to_owned() + &strip_str(str)),
+                                crate::lib::logger::traits::LogLevel::WARN => log.push_front("[WARN] ".to_owned() + &str),
+                                crate::lib::logger::traits::LogLevel::ERROR => log.push_front("[ERROR] ".to_owned() + &str),
+                                crate::lib::logger::traits::LogLevel::CRITICAL => log.push_front("[CRITICAL]".to_owned() + &str),
                                 _ => {},
                             }
                             if log.len() > LOG_MAX {
@@ -195,14 +193,15 @@ impl App {
             .iter()
             .enumerate()
             .map(|(i, w)| {
-                let mut item = ListItem::new(w.name.clone());
+                let mut cloned_name = w.name.clone();
+                match self.workers_info_state[i].worker {
+                    WorkerVariant::Worker => cloned_name = "<RUN> ".to_owned() + &cloned_name,
+                    WorkerVariant::Builder => cloned_name = "<WAIT> ".to_owned() + &cloned_name,
+                };
+                let mut item = ListItem::new(cloned_name);
                 if let Some(selected_index) = self.worker_list_state.selected() {
                     if selected_index == i {
-                        if self.current_window == CurrentWindow::Workers && self.is_editing {
-                            item = item.italic().underlined();
-                        } else {
-                            item = item.reversed().blue();
-                        }
+                        item = item.reversed().blue();
                     }
                 }
                 item
@@ -220,11 +219,14 @@ impl App {
         if self.show_help_popup {
             self.render_help_popup(frame);
         }
+
+        if let Some(err) = &self.builder_error {
+            self.render_error_popup(frame, err.clone());
+        }
     }
 
     /// Reads the crossterm events and updates the state of [`App`].
     fn handle_crossterm_events(&mut self) -> Result<()> {
-        // 90 FPS
         if event::poll(Duration::from_millis(40))? {
             match event::read()? {
                 // it's important to check KeyEventKind::Press to avoid handling key release events
@@ -249,18 +251,23 @@ impl App {
                     self.quit()
                 }
             }
-            (_, KeyCode::Tab) => match self.current_window {
-                CurrentWindow::Workers => self.current_window = CurrentWindow::Info,
-                CurrentWindow::Info => self.current_window = CurrentWindow::Workers,
+            (_, KeyCode::Tab) | (_, KeyCode::Right) | (_, KeyCode::Left) => {
+                if !self.is_editing {
+                    self.switch_window();
+                }
             },
-            // (_, KeyCode::Char('h')) => {
-            //     if !self.is_editing {
-            //         self.show_help_popup = !self.show_help_popup
-            //     }
-            // },
-            _ => match self.current_window {
-                CurrentWindow::Workers => self.handle_workers_list_keys(key),
-                CurrentWindow::Info => self.handle_worker_info_keys(key),
+            _ => {
+                if self.show_help_popup || self.builder_error.is_some() {
+                    if key.code == KeyCode::Enter {
+                        self.show_help_popup = false;
+                        self.builder_error = None;
+                    }
+                }
+
+                match self.current_window {
+                    CurrentWindow::Workers => self.handle_workers_list_keys(key),
+                    CurrentWindow::Info => self.handle_worker_info_keys(key),
+                }
             },
         }
     }
@@ -273,7 +280,7 @@ impl App {
                 if self.worker_list_state.selected().is_none(){
                     self.worker_list_state.select(Some(0));
                 }
-            }
+            },
             (_, KeyCode::Down) => {
                 if self.workers_info_state.is_empty() {
                     return;
@@ -299,6 +306,9 @@ impl App {
                     self.workers_info_state.remove(sel);
                     self.workers.remove(sel);
                 }
+            },
+            (_, KeyCode::Char('h')) => {
+                self.show_help_popup = !self.show_help_popup;
             }
             _ => {}
         }
@@ -345,6 +355,7 @@ impl App {
                                 self.workers[sel].worker_type = WorkerType::Worker;
                                 thread::spawn(move || worker.run());
                                 self.workers_info_state[sel].worker = WorkerVariant::Worker;
+                                self.is_editing = false;
                             }
                             Err(err) => {
                                 self.builder_error = Some(err.clone());
@@ -357,22 +368,36 @@ impl App {
         }
     }
 
+    fn switch_window(&mut self) {
+        match self.current_window {
+            CurrentWindow::Workers => self.current_window = CurrentWindow::Info,
+            CurrentWindow::Info => self.current_window = CurrentWindow::Workers,
+        }
+    }
+
     fn render_help_popup(&mut self, frame: &mut Frame) {
         let help_message = match self.current_window {
             CurrentWindow::Workers => Text::from(vec![
-                "<TAB>".bold().blue() + " - Switch Tabs".into(),
+                "<TAB> / <LEFT> / <RIGHT>".bold().blue() + " - Switch Tabs".into(),
                 "<a>".bold().blue() + " - Add Worker".into(),
                 "<d>".bold().blue() + " - Delete Worker".into(),
-                "<r>".bold().blue() + " - Rename Worker".into(),
                 "<Enter>".bold().blue() + " - Start/Stop worker".into(),
             ]),
             CurrentWindow::Info => Text::from(vec![
-                " <TAB> ".bold().blue() + " - Switch tabs".into(),
-                " (No other actions)".into(),
+                " <TAB> / <LEFT> / <RIGHT>".bold().blue() + " - Switch tabs".into(),
+                " <UP> / <DOWN>".bold().blue() + " - Move focus".into(),
+                " <Enter>".bold().blue() + " - Edit property or press button".into(), 
             ]),
         };
         let popup = Popup::new(" Help ".to_string(), help_message);
         frame.render_widget(popup, frame.area());
+    }
+
+    fn render_error_popup(&mut self, frame: &mut Frame, err: BuilderError) {
+            let error_message = Text::from(err.to_string());
+            let popup = Popup::new(" Error ".to_string(), error_message);
+
+            frame.render_widget(popup, frame.area());
     }
 
     /// Set running to false to quit the application.

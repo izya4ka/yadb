@@ -1,4 +1,4 @@
-use ratatui::{buffer::Buffer, layout::{Constraint, Flex, Layout, Rect}, style::{Style, Stylize}, text::{Line, Text}, widgets::{Block, Borders, Clear, Paragraph, Widget}};
+use ratatui::{buffer::Buffer, layout::{self, Constraint, Flex, Layout, Rect}, style::{Style, Stylize}, text::{Line, Text}, widgets::{Block, Borders, Clear, Paragraph, Widget}};
 
 pub struct Popup<'a> {
     // Custom widget properties
@@ -8,8 +8,8 @@ pub struct Popup<'a> {
 
 impl<'a> Widget for Popup<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-
-            let area = Self::popup_area(area, 60, 40);
+            let area = Self::popup_area(area, 30, 15);
+            Clear.render(area, buf);
 
             let title = Line::from(self.title)
                 .bold()
@@ -21,9 +21,16 @@ impl<'a> Widget for Popup<'a> {
                 .border_type(ratatui::widgets::BorderType::Double)
                 .title(title);
 
-            let text = Paragraph::new(self.content).centered().block(block);
-            Clear.render(area, buf);
-            text.render(area, buf);
+            let layout: [Rect; 2] = Layout::new(layout::Direction::Vertical, [
+                Constraint::Percentage(80),
+                Constraint::Length(1),
+            ]).areas(block.inner(area));
+            
+            block.render(area, buf);
+            let text = Paragraph::new(self.content).centered();
+            text.render(layout[0], buf);
+
+            Paragraph::new("OK").reversed().blue().render(layout[1], buf);
     }
 }
 

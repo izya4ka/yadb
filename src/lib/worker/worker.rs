@@ -1,5 +1,4 @@
 use anyhow::Result;
-use console::style;
 use std::io::{BufRead, BufReader};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
@@ -142,8 +141,7 @@ impl Worker {
                                     message_sender
                                         .send(WorkerMessage::Progress(ProgressMessage::Current(
                                             ProgressChangeMessage::Print(format!(
-                                                "GET {url} -> {}",
-                                                style(status).cyan()
+                                                "GET {url} -> {status}",
                                             )),
                                         )))
                                         .expect("SENDER ERROR");
@@ -162,8 +160,7 @@ impl Worker {
                                     message_sender
                                         .send(WorkerMessage::Progress(ProgressMessage::Current(
                                             ProgressChangeMessage::SetMessage(format!(
-                                                "GET {url} -> {}",
-                                                style(status).red()
+                                                "GET {url} -> {status}",
                                             )),
                                         )))
                                         .expect("SENDER ERROR");
@@ -177,8 +174,7 @@ impl Worker {
                                 message_sender
                                     .send(WorkerMessage::Log(LogLevel::WARN,
                                         format!(
-                                            "Error while sending request to {}: {e}",
-                                            style(&url).red()
+                                            "Error while sending request to {url}: {e}",
                                         )),
                                     )
                                     .expect("SENDER ERROR")
@@ -195,6 +191,7 @@ impl Worker {
                             .send(WorkerMessage::advance_total())
                             .expect("SENDER ERROR");
                     }
+
                     Ok(result)
                 }));
             }
