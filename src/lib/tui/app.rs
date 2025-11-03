@@ -1,4 +1,3 @@
-use clipboard::{ClipboardContext, ClipboardProvider};
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -15,7 +14,7 @@ use std::{
 
 use crate::lib::{
     tui::widgets::{
-        field::Field, popup::Popup, worker_info::{FieldType, Selection, WorkerInfo, WorkerState, WorkerVariant}
+        popup::Popup, worker_info::{FieldType, Selection, WorkerInfo, WorkerState, WorkerVariant}
     },
     worker::{
         builder::{BuilderError, WorkerBuilder},
@@ -379,9 +378,9 @@ impl App {
                                 .parse()
                                 .unwrap(),
                         )
-                        .uri(&self.workers_info_state[sel].fields_states[FieldType::Uri.index()]
+                        .uri(self.workers_info_state[sel].fields_states[FieldType::Uri.index()]
                                 .get())
-                        .wordlist(&self.workers_info_state[sel].fields_states[FieldType::WordlistPath.index()]
+                        .wordlist(self.workers_info_state[sel].fields_states[FieldType::WordlistPath.index()]
                                 .get());
 
                     let worker_result = builder_clone.build();

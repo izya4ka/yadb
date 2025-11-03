@@ -1,11 +1,10 @@
 use std::collections::VecDeque;
 
-use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{self, Constraint, Flex, Layout, Rect},
     style::{Style, Stylize},
     text::{Line, Text},
-    widgets::{Block, Borders, Gauge, Paragraph, StatefulWidget, Widget},
+    widgets::{Block, Gauge, Paragraph, StatefulWidget, Widget},
 };
 
 use crate::lib::{
