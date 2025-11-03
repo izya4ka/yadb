@@ -1,0 +1,70 @@
+use ratatui::{
+    style::{Style, Stylize},
+    widgets::{Block, Paragraph, StatefulWidget, Widget},
+};
+use tui_input::Input;
+
+#[derive(Debug, Default)]
+pub struct FieldState {
+    pub input: Input,
+    pub is_selected: bool,
+    pub is_editing: bool,
+    pub is_only_numbers: bool,
+}
+
+impl FieldState {
+    pub fn new(value: &str, is_selected: bool, is_only_numbers: bool) -> Self {
+        Self {
+            input: Input::new(value.to_string()),
+            is_selected,
+            is_editing: false,
+            is_only_numbers,
+        }
+    }
+
+    pub fn get(&self) -> &str {
+        self.input.value()
+    }
+}
+
+pub struct Field<'a> {
+    title: &'a str,
+}
+
+impl StatefulWidget for Field<'_> {
+    type State = FieldState;
+
+    fn render(
+        self,
+        area: ratatui::prelude::Rect,
+        buf: &mut ratatui::prelude::Buffer,
+        state: &mut Self::State,
+    ) {
+        let scroll = state.input.visual_scroll(area.width as usize);
+        let mut input = Paragraph::new(state.input.value())
+            .block(
+                Block::bordered()
+                    .title(self.title)
+                    .border_style(if state.is_editing {
+                        Style::default().red()
+                    } else if state.is_selected {
+                        Style::default().blue()
+                    } else {
+                        Style::default()
+                    }),
+            )
+            .scroll((0, scroll as u16));
+
+        if state.is_editing {
+            input = input.italic();
+        }
+
+        input.render(area, buf);
+    }
+}
+
+impl<'a> Field<'a> {
+    pub fn new(title: &'a str) -> Field<'a> {
+        Self { title }
+    }
+}

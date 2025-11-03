@@ -8,9 +8,13 @@ use ratatui::{
     widgets::{Block, Borders, Gauge, Paragraph, StatefulWidget, Widget},
 };
 
-use crate::lib::{tui::app::{LOG_MAX, MESSAGES_MAX}, worker::builder::{
-        DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT,
-    }};
+use crate::lib::{
+    tui::{
+        app::{LOG_MAX, MESSAGES_MAX},
+        widgets::field::{Field, FieldState},
+    },
+    worker::builder::{DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT},
+};
 
 #[derive(Debug, Default, Clone)]
 pub enum WorkerVariant {
@@ -20,34 +24,106 @@ pub enum WorkerVariant {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub enum Field {
+pub enum FieldType {
     #[default]
-    Name,
-    Threads,
-    Recursion,
-    Timeout,
-    WordlistPath,
-    Uri,
+    Name = 0,
+    Uri = 1,
+    Threads = 2,
+    Recursion = 3,
+    Timeout = 4,
+    WordlistPath = 5,
+}
+
+impl FieldType {
+    pub fn index(self) -> usize {
+        match self {
+            FieldType::Name => 0,
+            FieldType::Uri => 1,
+            FieldType::Threads => 2,
+            FieldType::Recursion => 3,
+            FieldType::Timeout => 4,
+            FieldType::WordlistPath => 5,
+        }
+    }
+
+    pub fn next(self) -> FieldType {
+        match self {
+            FieldType::Name => FieldType::Uri,
+            FieldType::Uri => FieldType::Threads,
+            FieldType::Threads => FieldType::Recursion,
+            FieldType::Recursion => FieldType::Timeout,
+            FieldType::Timeout => FieldType::WordlistPath,
+            FieldType::WordlistPath => FieldType::Name,
+        }
+    }
+
+    pub fn previous(self) -> FieldType {
+        match self {
+            FieldType::Name => FieldType::WordlistPath,
+            FieldType::Uri => FieldType::Name,
+            FieldType::Threads => FieldType::Uri,
+            FieldType::Recursion => FieldType::Threads,
+            FieldType::Timeout => FieldType::Recursion,
+            FieldType::WordlistPath => FieldType::Timeout,
+        }
+    }
+
+    pub fn is_first(self) -> bool {
+        self == FieldType::Name
+    }
+
+    pub fn is_last(self) -> bool {
+        self == FieldType::WordlistPath
+    }
+}
+
+const FIELDS_NUMBER: usize = 6;
+
+const NAMES: [&str; FIELDS_NUMBER] = [
+    " Name ",
+    " URI ",
+    " Threads ",
+    " Recursion depth ",
+    " Max timeout ",
+    " Wordlist path ",
+];
+
+#[derive(Debug, PartialEq)]
+pub enum Selection {
+    Field(FieldType),
     RunButton,
 }
 
-#[derive(Debug)]
-pub struct WorkerProperties {
-    pub threads: String,
-    pub recursion: String,
-    pub timeout: String,
-    pub wordlist_path: String,
-    pub uri: String,
+impl Default for Selection {
+    fn default() -> Self {
+        Selection::Field(FieldType::default())
+    }
 }
 
-impl Default for WorkerProperties {
-    fn default() -> Self {
-        Self {
-            threads: DEFAULT_THREADS_NUMBER.to_string(),
-            recursion: DEFAULT_RECURSIVE_MODE.to_string(),
-            timeout: DEFAULT_TIMEOUT.to_string(),
-            wordlist_path: "/usr/share".into(),
-            uri: "http://".to_string(),
+impl Selection {
+    fn set_next(&mut self) {
+        match self {
+            Selection::Field(field) => {
+                if field.is_last() {
+                    *self = Selection::RunButton;
+                    return;
+                };
+                *self = Selection::Field(field.next());
+            }
+            Selection::RunButton => *self = Selection::Field(FieldType::Name),
+        }
+    }
+
+    fn set_previous(&mut self) {
+        match self {
+            Selection::Field(field) => {
+                if field.is_first() {
+                    *self = Selection::RunButton;
+                    return;
+                }
+                *self = Selection::Field(field.previous());
+            }
+            Selection::RunButton => *self = Selection::Field(FieldType::WordlistPath),
         }
     }
 }
@@ -56,10 +132,8 @@ impl Default for WorkerProperties {
 pub struct WorkerState {
     pub name: String,
     pub worker: WorkerVariant,
-    currently_editing: Option<Field>,
-    selected: Field,
+    pub selection: Selection,
     pub current_parsing: String,
-    pub properties: WorkerProperties,
     pub log: VecDeque<String>,
     pub messages: VecDeque<String>,
     pub progress_current_total: usize,
@@ -67,6 +141,8 @@ pub struct WorkerState {
     pub progress_all_total: usize,
     pub progress_all_now: usize,
     pub do_build: bool,
+    pub fields_states: [FieldState; FIELDS_NUMBER],
+    cursor_position: (u16, u16),
 }
 
 impl Default for WorkerState {
@@ -74,18 +150,56 @@ impl Default for WorkerState {
         Self {
             name: "Unnamed".to_string(),
             worker: Default::default(),
-            currently_editing: Default::default(),
-            selected: Default::default(),
+            cursor_position: Default::default(),
+            selection: Default::default(),
             current_parsing: Default::default(),
-            properties: Default::default(),
             log: Default::default(),
             messages: Default::default(),
             do_build: Default::default(),
-            progress_current_total: 1,
-            progress_current_now: 0,
-            progress_all_total: 1,
-            progress_all_now: 0,
+            progress_current_total: Default::default(),
+            progress_current_now: Default::default(),
+            progress_all_total: Default::default(),
+            progress_all_now: Default::default(),
+            fields_states: [
+                FieldState::new("Unnamed", true, false),
+                FieldState::new("http://localhost", false, false),
+                FieldState::new(DEFAULT_THREADS_NUMBER.to_string().as_str(), false, true),
+                FieldState::new(DEFAULT_RECURSIVE_MODE.to_string().as_str(), false, true),
+                FieldState::new(DEFAULT_TIMEOUT.to_string().as_str(), false, true),
+                FieldState::new("/usr/share", false, false),
+            ],
         }
+    }
+}
+
+impl WorkerState {
+    pub fn set_next_selection(&mut self) {
+        if let Selection::Field(f) = self.selection {
+            self.fields_states[f.index()].is_selected = false;
+        };
+        self.selection.set_next();
+        if let Selection::Field(f) = self.selection {
+            self.fields_states[f.index()].is_selected = true;
+        };
+    }
+
+    pub fn set_previous_selection(&mut self) {
+        if let Selection::Field(f) = self.selection {
+            self.fields_states[f.index()].is_selected = false;
+        }
+        self.selection.set_previous();
+        if let Selection::Field(f) = self.selection {
+            self.fields_states[f.index()].is_selected = true;
+        }
+    }
+
+    pub fn switch_field_editing(&mut self, field: FieldType) {
+        let ind = field.index();
+        self.fields_states[ind].is_editing = !self.fields_states[ind].is_editing;
+    }
+
+    pub fn get_cursor_position(&self) -> (u16, u16) {
+        self.cursor_position
     }
 }
 
@@ -115,60 +229,77 @@ impl StatefulWidget for WorkerInfo {
                 )
                 .areas(area);
 
-                let args_and_log_layout: [Rect; 2] = Layout::new(layout::Direction::Horizontal, [
-                    Constraint::Percentage(30),
-                    Constraint::Percentage(70),
-                ]).areas(layout[0]);
+                let args_and_log_layout: [Rect; 2] = Layout::new(
+                    layout::Direction::Horizontal,
+                    [Constraint::Percentage(30), Constraint::Percentage(70)],
+                )
+                .areas(layout[0]);
 
-                let args_block = Block::new()
-                    .borders(Borders::all())
-                    .title(" Arguments ");
+                let names: [&str; 4] = [
+                    " Logs ",
+                    " Results ",
+                    " Currently requesting ",
+                    " Arguments ",
+                ];
 
                 Paragraph::new(Text::from_iter::<[Line; 5]>([
-                    Line::from("URI: ") + state.properties.uri.clone().blue(),
-                    Line::from("Threads: ") + state.properties.threads.clone().blue(),
-                    Line::from("Recursion depth: ") + state.properties.recursion.clone().blue(),
-                    Line::from("Timeout: ") + state.properties.timeout.clone().blue(),
-                    Line::from("Wordlist: ") + state.properties.wordlist_path.clone().blue(),
-                ])).block(args_block).render(args_and_log_layout[0], buf);
-
-                let log_block = Block::new().borders(Borders::all()).title(" Logs ");
-                let message_block = Block::new().borders(Borders::all()).title(" Results ");
-                let current_block = Block::new()
-                    .borders(Borders::all())
-                    .title(" Currently requesting ");
+                    Line::from("URI: ") + state.fields_states[FieldType::Name.index()].get().blue(),
+                    Line::from("Threads: ")
+                        + state.fields_states[FieldType::Threads.index()].get().blue(),
+                    Line::from("Recursion depth: ")
+                        + state.fields_states[FieldType::Recursion.index()]
+                            .get()
+                            .blue(),
+                    Line::from("Timeout: ")
+                        + state.fields_states[FieldType::Timeout.index()].get().blue(),
+                    Line::from("Wordlist: ")
+                        + state.fields_states[FieldType::WordlistPath.index()]
+                            .get()
+                            .blue(),
+                ]))
+                .block(Block::bordered().title(names[3]))
+                .render(args_and_log_layout[0], buf);
 
                 let log_lines = state.log.iter().map(|s| Line::from(s.as_str()));
                 let message_lines = state.messages.iter().map(|s| Line::from(s.as_str()));
 
                 Paragraph::new(Text::from_iter(log_lines))
-                    .block(log_block)
+                    .block(Block::bordered().title(names[0]))
                     .render(args_and_log_layout[1], buf);
 
                 Paragraph::new(Text::from_iter(message_lines))
-                    .block(message_block)
+                    .block(Block::bordered().title(names[1]))
                     .render(layout[1], buf);
-    
+
                 Paragraph::new(Line::from(state.current_parsing.as_str()))
-                    .block(current_block)
+                    .block(Block::bordered().title(names[2]))
                     .render(layout[2], buf);
-                
-                if !state.properties.recursion.starts_with('0') {
+
+                if !state.fields_states[FieldType::Recursion.index()]
+                    .get()
+                    .starts_with('0')
+                {
                     Gauge::default()
                         .block(Block::bordered().title(" Current recursion progress "))
                         .gauge_style(Style::new().white().on_black().italic())
-                        .ratio(checked_ratio(state.progress_current_now, state.progress_current_total))
+                        .ratio(checked_ratio(
+                            state.progress_current_now,
+                            state.progress_current_total,
+                        ))
                         .render(layout[3], buf);
                 }
 
                 Gauge::default()
                     .block(Block::bordered().title(" Total progress "))
                     .gauge_style(Style::new().blue().on_black().italic())
-                    .ratio(checked_ratio(state.progress_all_now, state.progress_all_total))
+                    .ratio(checked_ratio(
+                        state.progress_all_now,
+                        state.progress_all_total,
+                    ))
                     .render(layout[4], buf);
             }
             WorkerVariant::Builder => {
-                let layout: [Rect; 7] = Layout::new(
+                let layout: [Rect; FIELDS_NUMBER + 1] = Layout::new(
                     layout::Direction::Vertical,
                     [
                         Constraint::Max(3),
@@ -182,90 +313,21 @@ impl StatefulWidget for WorkerInfo {
                 )
                 .areas(area);
 
-                // NAME
-                let mut name_block = Block::new().borders(Borders::all()).title(" Name ");
-                let mut name_paragraph = Paragraph::new(state.name.as_str());
-
-                // URI
-                let mut uri_block = Block::new().borders(Borders::all()).title(" URI ");
-                let mut uri_paragraph = Paragraph::new(state.properties.uri.as_str());
-
-                // THREADS
-                let mut threads_block = Block::new().borders(Borders::all()).title(" Threads ");
-                let mut threads_paragraph = Paragraph::new(state.properties.threads.as_str());
-
-                // RECURSION DEPTH
-                let mut recursion_block = Block::new()
-                    .borders(Borders::all())
-                    .title(" Recursion depth ");
-                let mut recursion_paragraph = Paragraph::new(state.properties.recursion.as_str());
-
-                // MAX TIMEOUT
-                let mut timeout_block = Block::new().borders(Borders::all()).title(" Max Timeout ");
-                let mut timeout_paragraph = Paragraph::new(state.properties.timeout.as_str());
-
-                // WORDLIST PATH
-                let mut wordlist_path_block = Block::new()
-                    .borders(Borders::all())
-                    .title(" Wordlist path ");
-                let mut wordlist_path_paragraph =
-                    Paragraph::new(state.properties.wordlist_path.as_str());
-
-                // RUN BUTTON
-                let mut run_button = Block::new().borders(Borders::all());
-
-                match state.selected {
-                    Field::Name => name_block = name_block.border_style(Style::default().red()),
-                    Field::Threads => {
-                        threads_block = threads_block.border_style(Style::default().red())
+                for (ind, field_state) in state.fields_states.iter_mut().enumerate() {
+                    if field_state.is_editing {
+                        state.cursor_position = (
+                            layout[ind].x + 1 + field_state.input.cursor() as u16,
+                            layout[ind].y + 1
+                        )  
                     }
-                    Field::Recursion => {
-                        recursion_block = recursion_block.border_style(Style::default().red())
-                    }
-                    Field::Timeout => {
-                        timeout_block = timeout_block.border_style(Style::default().red())
-                    }
-                    Field::WordlistPath => {
-                        wordlist_path_block =
-                            wordlist_path_block.border_style(Style::default().red())
-                    }
-                    Field::Uri => uri_block = uri_block.border_style(Style::default().red()),
-                    Field::RunButton => {
-                        run_button = run_button.border_style(Style::default().green())
-                    }
+                    Field::new(NAMES[ind]).render(layout[ind], buf, field_state);
                 }
 
-                if let Some(input) = &state.currently_editing {
-                    match input {
-                        Field::Name => name_paragraph = name_paragraph.italic(),
-                        Field::Threads => threads_paragraph = threads_paragraph.italic(),
-                        Field::Recursion => recursion_paragraph = recursion_paragraph.italic(),
-                        Field::Timeout => timeout_paragraph = timeout_paragraph.italic(),
-                        Field::WordlistPath => {
-                            wordlist_path_paragraph = wordlist_path_paragraph.italic()
-                        }
-                        Field::Uri => uri_paragraph = uri_paragraph.italic(),
-                        _ => {}
-                    }
-                }
-
-                name_paragraph.block(name_block).render(layout[0], buf);
-                uri_paragraph.block(uri_block).render(layout[1], buf);
-                threads_paragraph
-                    .block(threads_block)
-                    .render(layout[2], buf);
-                recursion_paragraph
-                    .block(recursion_block)
-                    .render(layout[3], buf);
-                timeout_paragraph
-                    .block(timeout_block)
-                    .render(layout[4], buf);
-                wordlist_path_paragraph
-                    .block(wordlist_path_block)
-                    .render(layout[5], buf);
                 Paragraph::new("Run")
                     .centered()
-                    .block(run_button)
+                    .block(Block::bordered().style(if state.selection == Selection::RunButton {
+                        Style::default().green()
+                    } else { Style::default() }))
                     .alignment(layout::Alignment::Center)
                     .render(
                         Self::center(layout[6], Constraint::Max(40), Constraint::Length(3)),
@@ -285,98 +347,6 @@ impl WorkerInfo {
         area
     }
 }
-
-impl WorkerState {
-    pub fn handle_keys(&mut self, key: KeyEvent, is_editing: &mut bool) {
-
-        match self.worker {
-            WorkerVariant::Worker(_) => match (key.modifiers, key.code) {
-                _ => {}
-            },
-            WorkerVariant::Builder => match (key.modifiers, key.code) {
-                (_, KeyCode::Down) => match &self.selected {
-                    Field::Name => self.selected = Field::Uri,
-                    Field::Uri => self.selected = Field::Threads,
-                    Field::Threads => self.selected = Field::Recursion,
-                    Field::Recursion => self.selected = Field::Timeout,
-                    Field::Timeout => self.selected = Field::WordlistPath,
-                    Field::WordlistPath => self.selected = Field::RunButton,
-                    Field::RunButton => self.selected = Field::Name,
-                },
-                (_, KeyCode::Up) => match &self.selected {
-                    Field::Name => self.selected = Field::RunButton,
-                    Field::Uri => self.selected = Field::Name,
-                    Field::Threads => self.selected = Field::Uri,
-                    Field::Recursion => self.selected = Field::Threads,
-                    Field::Timeout => self.selected = Field::Recursion,
-                    Field::WordlistPath => self.selected = Field::Timeout,
-                    Field::RunButton => self.selected = Field::WordlistPath,
-                },
-                (_, KeyCode::Enter) => {
-
-                    *is_editing = !*is_editing;
-
-                    if *is_editing {
-                        self.currently_editing = Some(self.selected);
-                    } else {
-                        self.currently_editing = None;
-                    }
-
-                    if self.currently_editing == Some(Field::RunButton) {
-                        self.do_build = true;
-                    }
-                },
-                _ => {}
-            },
-        }
-    }
-
-    pub fn handle_editing(&mut self, key: KeyEvent, is_editing: &mut bool) {
-        match (key.modifiers, key.code) {
-            (_, KeyCode::Char(ch)) => {
-                if let Some(field) = &self.currently_editing { match field {
-                        Field::Name => self.name.push(ch),
-                        Field::Threads => {
-                            if ch.is_ascii_digit() && !self.properties.threads.starts_with('0') {
-                                self.properties.threads.push(ch);
-                            }
-                        }
-                        Field::Recursion => {
-                            if ch.is_ascii_digit() && !self.properties.recursion.starts_with('0') {
-                                self.properties.recursion.push(ch);
-                            }
-                        }
-                        Field::Timeout => {
-                            if ch.is_ascii_digit() && !self.properties.timeout.starts_with('0') {
-                                self.properties.timeout.push(ch);
-                            }
-                        }
-                        Field::WordlistPath => self.properties.wordlist_path.push(ch),
-                        Field::Uri => self.properties.uri.push(ch),
-                        _ => {},
-                    }
-                }
-            }
-            (_, KeyCode::Backspace) => if let Some(field) = &self.currently_editing {
-                match field {
-                    Field::Name => _ = self.name.pop(),
-                    Field::Threads => _ = self.properties.threads.pop(),
-                    Field::Recursion => _ = self.properties.recursion.pop(),
-                    Field::Timeout => _ = self.properties.timeout.pop(),
-                    Field::WordlistPath => _ = self.properties.wordlist_path.pop(),
-                    Field::Uri => _ = self.properties.uri.pop(),
-                    _ => {},
-                }
-            },
-            (_, KeyCode::Enter) => {
-                self.currently_editing = None;
-                *is_editing = false;
-            }
-            _ => {}
-        }
-    }
-}
-
 
 fn checked_ratio(a: usize, b: usize) -> f64 {
     let res = a as f64 / b as f64;

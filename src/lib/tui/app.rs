@@ -1,3 +1,4 @@
+use clipboard::{ClipboardContext, ClipboardProvider};
 use color_eyre::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::{
@@ -7,14 +8,14 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, BorderType, Borders, List, ListItem, ListState},
 };
+use tui_input::InputRequest;
 use std::{
     sync::mpsc::{self, Receiver}, thread::{self}, time::Duration
 };
 
 use crate::lib::{
     tui::widgets::{
-        popup::Popup,
-        worker_info::{WorkerInfo, WorkerState, WorkerVariant},
+        field::Field, popup::Popup, worker_info::{FieldType, Selection, WorkerInfo, WorkerState, WorkerVariant}
     },
     worker::{
         builder::{BuilderError, WorkerBuilder},
@@ -55,6 +56,13 @@ impl Default for WorkerRx {
     }
 }
 
+#[derive(Debug, Default, PartialEq)]
+enum InputMode {
+    #[default]
+    Normal,
+    Editing
+}
+
 /// The main application which holds the state and logic of the application.
 #[derive(Debug, Default)]
 pub struct App {
@@ -68,7 +76,7 @@ pub struct App {
     show_help_popup: bool,
     worker_list_state: ListState,
     builder_error: Option<BuilderError>,
-    is_editing: bool,
+    input_mode: InputMode
 }
 
 impl App {
@@ -220,6 +228,10 @@ impl App {
             let worker_info = WorkerInfo {};
             let state = &mut self.workers_info_state[sel];
             frame.render_stateful_widget(worker_info, block_info_inner, state);
+
+            if self.input_mode == InputMode::Editing {
+                frame.set_cursor_position(state.get_cursor_position());
+            }
         }
 
         if self.show_help_popup {
@@ -247,34 +259,22 @@ impl App {
 
     /// Handles the key events and updates the state of [`App`].
     fn on_key_event(&mut self, key: KeyEvent) {
-        match (key.modifiers, key.code) {
-            (KeyModifiers::CONTROL, KeyCode::Char('c') | KeyCode::Char('C')) => {
-                if self.show_help_popup {
-                    self.show_help_popup = false;
-                } else if self.is_editing {
-                    self.is_editing = false;
-                } else {
-                    self.quit()
-                }
-            }
-            (_, KeyCode::Tab) | (_, KeyCode::Right) | (_, KeyCode::Left) => {
-                if !self.is_editing {
-                    self.switch_window();
-                }
-            },
-            _ => {
-                if (self.show_help_popup || self.builder_error.is_some()) && key.code == KeyCode::Enter {
-                     {
-                        self.show_help_popup = false;
-                        self.builder_error = None;
-                    }
-                }
 
-                match self.current_window {
-                    CurrentWindow::Workers => self.handle_workers_list_keys(key),
-                    CurrentWindow::Info => self.handle_worker_info_keys(key),
-                }
-            },
+        if (key.modifiers, key.code) == (KeyModifiers::CONTROL, KeyCode::Char('c')) {
+            self.quit();
+            return;
+        };
+
+        match self.input_mode {
+            InputMode::Normal => self.handle_normal_input(key),
+            InputMode::Editing => self.handle_editing_input(key),
+        }
+    }
+
+    fn handle_normal_input(&mut self, key: KeyEvent) {
+        match self.current_window {
+            CurrentWindow::Workers => self.handle_workers_list_keys(key),
+            CurrentWindow::Info => self.handle_worker_info_keys(key),
         }
     }
 
@@ -315,68 +315,132 @@ impl App {
             },
             (_, KeyCode::Char('h')) => {
                 self.show_help_popup = !self.show_help_popup;
-            }
+            },
+            (_, KeyCode::Right | KeyCode::Enter | KeyCode::Tab) => {
+                if !self.workers_info_state.is_empty() {
+                    self.switch_window()
+                }
+            },
             _ => {}
         }
     }
 
     fn handle_worker_info_keys(&mut self, key: KeyEvent) {
         if let Some(sel) = self.worker_list_state.selected() {
-            if self.is_editing {
-                self.workers_info_state[sel].handle_editing(key, &mut self.is_editing);
-            } else {
-
-                if key.code == KeyCode::Char('h') {
+            let worker_state = &mut self.workers_info_state[sel];
+            match (key.modifiers, key.code) {
+                (_, KeyCode::Char('h')) => {
                     self.show_help_popup = !self.show_help_popup;
-                    return;
+                },
+                (_, KeyCode::Tab | KeyCode::Left) => self.switch_window(),
+                (_, KeyCode::Down) => worker_state.set_next_selection(),
+                (_, KeyCode::Up) => worker_state.set_previous_selection(),
+                (_, KeyCode::Enter) => {
+                    if self.builder_error.is_some() || self.show_help_popup {
+                        self.close_all_popups();
+                        return;
+                    };
+
+                    match worker_state.selection {
+                        Selection::Field(field) => {
+                            worker_state.switch_field_editing(field);
+                            self.switch_input_mode();
+                        },
+                        Selection::RunButton => {
+                            worker_state.do_build = true;
+                        },
+                    }
                 }
+                _ => {}
+            };
 
-                self.workers_info_state[sel].handle_keys(key, &mut self.is_editing);
+            if self.workers_info_state[sel].do_build
+                && let WorkerType::Builder(builder) = &mut self.workers[sel].worker_type {
+                    let builder_clone = builder
+                        .clone()
+                        .recursive(
+                            self.workers_info_state[sel]
+                                .fields_states[FieldType::Recursion.index()]
+                                .get()
+                                .parse()
+                                .unwrap(),
+                        )
+                        .threads(
+                            self.workers_info_state[sel]
+                                .fields_states[FieldType::Threads.index()]
+                                .get()
+                                .parse()
+                                .unwrap(),
+                        )
+                        .timeout(
+                            self.workers_info_state[sel]
+                                .fields_states[FieldType::Timeout.index()]
+                                .get()
+                                .parse()
+                                .unwrap(),
+                        )
+                        .uri(&self.workers_info_state[sel].fields_states[FieldType::Uri.index()]
+                                .get())
+                        .wordlist(&self.workers_info_state[sel].fields_states[FieldType::WordlistPath.index()]
+                                .get());
 
-                if self.workers_info_state[sel].do_build
-                    && let WorkerType::Builder(builder) = &mut self.workers[sel].worker_type {
-                        let builder_clone = builder
-                            .clone()
-                            .recursive(
-                                self.workers_info_state[sel]
-                                    .properties
-                                    .recursion
-                                    .parse()
-                                    .unwrap(),
-                            )
-                            .threads(
-                                self.workers_info_state[sel]
-                                    .properties
-                                    .threads
-                                    .parse()
-                                    .unwrap(),
-                            )
-                            .timeout(
-                                self.workers_info_state[sel]
-                                    .properties
-                                    .timeout
-                                    .parse()
-                                    .unwrap(),
-                            )
-                            .uri(&self.workers_info_state[sel].properties.uri)
-                            .wordlist(&self.workers_info_state[sel].properties.wordlist_path);
-
-                        let worker_result = builder_clone.build();
-                        match worker_result {
-                            Ok(worker) => {
-                                self.workers[sel].worker_type = WorkerType::Worker;
-                                thread::spawn(move || worker.run());
-                                self.workers_info_state[sel].worker = WorkerVariant::Worker(false);
-                                self.is_editing = false;
-                            }
-                            Err(err) => {
-                                self.builder_error = Some(err.clone());
-                                self.workers_info_state[sel].do_build = false;
-                            }
+                    let worker_result = builder_clone.build();
+                    match worker_result {
+                        Ok(worker) => {
+                            self.workers[sel].worker_type = WorkerType::Worker;
+                            thread::spawn(move || worker.run());
+                            self.workers_info_state[sel].worker = WorkerVariant::Worker(false);
                         }
+                        Err(err) => {
+                            self.builder_error = Some(err.clone());
+                            self.workers_info_state[sel].do_build = false;
+                        }
+                    }
                 }
-            }
         }
+    }
+    fn handle_editing_input(&mut self, key: KeyEvent) {
+        match self.current_window {
+            CurrentWindow::Workers => todo!(),
+            CurrentWindow::Info => {
+                if let Some(sel) = self.worker_list_state.selected() {
+                    let state = &mut self.workers_info_state[sel];
+                    if let Selection::Field(f) = state.selection {
+                        let field_state = &mut state.fields_states[f.index()];
+                        match (key.modifiers, key.code) {
+                            (_, KeyCode::Char(c)) => {
+                                if field_state.is_only_numbers {
+                                    if c.is_ascii_digit() && !field_state.get().starts_with('0') {
+                                        field_state.input.handle(InputRequest::InsertChar(c));
+                                    }
+                                } else {
+                                    field_state.input.handle(InputRequest::InsertChar(c));
+                                }
+                            },
+                            (KeyModifiers::CONTROL, KeyCode::Right) => {
+                                field_state.input.handle(InputRequest::GoToEnd);
+                            },
+                            (KeyModifiers::CONTROL, KeyCode::Left) => {
+                                field_state.input.handle(InputRequest::GoToStart);
+                            },
+                            (_, KeyCode::Backspace) => {field_state.input.handle(InputRequest::DeletePrevChar);},
+                            (_, KeyCode::Delete) => {field_state.input.handle(InputRequest::DeleteNextChar);},
+                            (_, KeyCode::Left) => {
+                                field_state.input.handle(InputRequest::GoToPrevChar);
+                            },
+                            (_, KeyCode::Right) => {
+                                field_state.input.handle(InputRequest::GoToNextChar);
+                            },
+                            (_, KeyCode::Esc | KeyCode::Enter) => {
+                                state.switch_field_editing(f);
+                                self.switch_input_mode();
+                            }
+                            _ => {}
+                        };
+                    };
+                }
+            },
+        };
     }
 
     fn switch_window(&mut self) {
@@ -411,8 +475,21 @@ impl App {
             frame.render_widget(popup, frame.area());
     }
 
+    fn switch_input_mode(&mut self) {
+        match self.input_mode {
+            InputMode::Normal => self.input_mode = InputMode::Editing,
+            InputMode::Editing => self.input_mode = InputMode::Normal,
+        }
+    }
+
+    fn close_all_popups(&mut self) {
+        self.builder_error = None;
+        self.show_help_popup = false;
+    }
+
     /// Set running to false to quit the application.
     fn quit(&mut self) {
         self.running = false;
     }
 }
+
