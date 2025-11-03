@@ -1,11 +1,11 @@
 [package]
 name = "yadb"
 description = "Yet Another Directory Buster"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 readme = "README.md"
 repository = "https://github.com/izya4ka/yadb"
-license = "GPL-3.0"
+license = "GPL-3.0
 keywords = ["net", "scan", "web", "cli", "tui", "pentest"]
 default-run = "yadb-cli"
 
@@ -32,7 +32,7 @@ panic = "unwind"
 strip = "none"
 
 [profile.release]
-opt-level = 2
+opt-level = 3
 debug = false
 lto = "fat"
 codegen-units = 1
