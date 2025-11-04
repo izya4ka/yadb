@@ -422,6 +422,9 @@ impl App {
                             (KeyModifiers::CONTROL, KeyCode::Left) => {
                                 field_state.input.handle(InputRequest::GoToStart);
                             },
+                            (KeyModifiers::ALT, KeyCode::Backspace) => {
+                                field_state.input.handle(InputRequest::DeletePrevWord);
+                            },
                             (_, KeyCode::Backspace) => {field_state.input.handle(InputRequest::DeletePrevChar);},
                             (_, KeyCode::Delete) => {field_state.input.handle(InputRequest::DeleteNextChar);},
                             (_, KeyCode::Left) => {
