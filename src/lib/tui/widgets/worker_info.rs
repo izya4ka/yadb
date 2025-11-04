@@ -240,7 +240,7 @@ impl StatefulWidget for WorkerInfo {
                 ];
 
                 Paragraph::new(Text::from_iter::<[Line; 5]>([
-                    Line::from("URI: ") + state.fields_states[FieldType::Name.index()].get().blue(),
+                    Line::from("URI: ") + state.fields_states[FieldType::Uri.index()].get().blue(),
                     Line::from("Threads: ")
                         + state.fields_states[FieldType::Threads.index()].get().blue(),
                     Line::from("Recursion depth: ")
