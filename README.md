@@ -56,3 +56,7 @@ Contributions are welcome! If you have ideas for improvements, bug fixes, or new
 ## 📄 License
 
 This project is licensed under the **GNU General Public License version 3**.
+
+## ⚠️ Disclaimer
+
+This project is provided for educational and research purposes only — use it responsibly and only on systems you own or have explicit permission to test; the author accepts no liability for any misuse or damage.
