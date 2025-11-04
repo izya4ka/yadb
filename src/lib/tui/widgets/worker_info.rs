@@ -129,7 +129,6 @@ impl Selection {
 
 #[derive(Debug)]
 pub struct WorkerState {
-    pub name: String,
     pub worker: WorkerVariant,
     pub selection: Selection,
     pub current_parsing: String,
@@ -147,7 +146,6 @@ pub struct WorkerState {
 impl Default for WorkerState {
     fn default() -> Self {
         Self {
-            name: "Unnamed".to_string(),
             worker: Default::default(),
             cursor_position: Default::default(),
             selection: Default::default(),

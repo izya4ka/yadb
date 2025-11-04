@@ -206,14 +206,14 @@ impl App {
             .iter()
             .enumerate()
             .map(|(i, w)| {
-                let mut cloned_name = w.name.clone();
-                match self.workers_info_state[i].worker {
-                    WorkerVariant::Worker(s) if !s => cloned_name = "<RUN> ".to_owned() + &cloned_name,
-                    WorkerVariant::Worker(s) if s => cloned_name = "<DONE> ".to_owned() + &cloned_name,
-                    WorkerVariant::Builder => cloned_name = "<WAIT> ".to_owned() + &cloned_name,
-                    _ => {}
+                let name = w.fields_states[0].get();
+                let formated_name = match self.workers_info_state[i].worker {
+                    WorkerVariant::Worker(s) if !s => format!("<RUN> {name}"),
+                    WorkerVariant::Worker(s) if s => format!("<DONE> {name}"),
+                    WorkerVariant::Builder => format!("<WAIT> {name}"),
+                    _ => String::default(),
                 };
-                let mut item = ListItem::new(cloned_name);
+                let mut item = ListItem::new(formated_name);
                 if let Some(selected_index) = self.worker_list_state.selected() && selected_index == i  {
                     item = item.reversed().blue();
                 }
