@@ -1,0 +1,33 @@
+name: Build binaries on release
+
+on:
+  release:
+    types: ['published']
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-cd:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Build
+        run: cargo build --release
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ./target/release/yadb-cli
+            ./target/release/yadb-tui

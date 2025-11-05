@@ -1,6 +1,7 @@
 use std::{
     fmt::Write,
-    sync::{Mutex, mpsc}, thread,
+    sync::{Mutex, mpsc},
+    thread,
 };
 
 use clap::Parser;
@@ -9,9 +10,13 @@ use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use yadb::lib::{
     logger::{
         file_logger::FileLogger,
-        traits::{WorkerLogger, NullLogger},
+        traits::{NullLogger, WorkerLogger},
     },
-    util, worker::{builder::WorkerBuilder, messages::{WorkerMessage, ProgressChangeMessage, ProgressMessage}},
+    util,
+    worker::{
+        builder::WorkerBuilder,
+        messages::{ProgressChangeMessage, ProgressMessage, WorkerMessage},
+    },
 };
 
 #[derive(Parser)]
@@ -127,21 +132,21 @@ fn main() {
                                 ProgressChangeMessage::Finish => cpb.finish(),
                             }
                         }
-                        ProgressMessage::Total(
-                            progress_change_message,
-                        ) => match progress_change_message {
-                            ProgressChangeMessage::SetMessage(str) => tpb.set_message(str),
-                            ProgressChangeMessage::SetSize(size) => {
-                                tpb.set_length(size.try_into().unwrap())
+                        ProgressMessage::Total(progress_change_message) => {
+                            match progress_change_message {
+                                ProgressChangeMessage::SetMessage(str) => tpb.set_message(str),
+                                ProgressChangeMessage::SetSize(size) => {
+                                    tpb.set_length(size.try_into().unwrap())
+                                }
+                                ProgressChangeMessage::Start(size) => {
+                                    tpb.reset();
+                                    tpb.set_length(size.try_into().unwrap());
+                                }
+                                ProgressChangeMessage::Advance => tpb.inc(1),
+                                ProgressChangeMessage::Print(str) => tpb.println(str),
+                                ProgressChangeMessage::Finish => tpb.finish(),
                             }
-                            ProgressChangeMessage::Start(size) => {
-                                tpb.reset();
-                                tpb.set_length(size.try_into().unwrap());
-                            }
-                            ProgressChangeMessage::Advance => tpb.inc(1),
-                            ProgressChangeMessage::Print(str) => tpb.println(str),
-                            ProgressChangeMessage::Finish => tpb.finish(),
-                        },
+                        }
                     },
                     WorkerMessage::Log(log_level, str) => {
                         logger.log(log_level, str);

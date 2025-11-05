@@ -1,10 +1,13 @@
-use std::{path::PathBuf, sync::{Arc, mpsc::Sender}};
+use std::{
+    path::PathBuf,
+    sync::{Arc, mpsc::Sender},
+};
 
 use anyhow::Result;
 use thiserror::Error;
 use url::{ParseError, Url};
 
-use crate::lib::worker::{messages::WorkerMessage, worker::Worker};
+use crate::lib::worker::{messages::WorkerMessage, unit::Worker};
 
 pub const DEFAULT_THREADS_NUMBER: usize = 50;
 pub const DEFAULT_RECURSIVE_MODE: usize = 0;
@@ -34,12 +37,11 @@ pub enum BuilderError {
     NotAFile(String),
 
     #[error("Sender channel not specified")]
-    SenderChannelNotSpecified
+    SenderChannelNotSpecified,
 }
 
 #[derive(Debug, Clone)]
-pub struct WorkerBuilder
-{
+pub struct WorkerBuilder {
     pub threads: Option<usize>,
     pub recursion: Option<usize>,
     pub timeout: Option<usize>,
@@ -143,18 +145,14 @@ impl WorkerBuilder {
             return Err(err);
         }
 
-        let uri = self
-            .uri
-            .ok_or(BuilderError::HostNotSpecified)?;
+        let uri = self.uri.ok_or(BuilderError::HostNotSpecified)?;
 
         let threads = self.threads.unwrap_or(DEFAULT_THREADS_NUMBER);
         let recursion_depth = self.recursion.unwrap_or(DEFAULT_RECURSIVE_MODE);
         let timeout = self.timeout.unwrap_or(DEFAULT_TIMEOUT);
 
-        let wordlist = self
-            .wordlist
-            .ok_or(BuilderError::WordlistNotSpecified)?;
-        
+        let wordlist = self.wordlist.ok_or(BuilderError::WordlistNotSpecified)?;
+
         let message_sender = self
             .message_sender
             .ok_or(BuilderError::SenderChannelNotSpecified)?;

@@ -10,7 +10,10 @@ use ratatui::{
 use crate::lib::{
     tui::{
         app::{LOG_MAX, MESSAGES_MAX},
-        widgets::field::{Field, FieldState},
+        widgets::{
+            field::{Field, FieldState, FieldType},
+            path_hint::PathHintState,
+        },
     },
     worker::builder::{DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT},
 };
@@ -23,7 +26,7 @@ pub enum WorkerVariant {
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub enum FieldType {
+pub enum FieldName {
     #[default]
     Name = 0,
     Uri = 1,
@@ -33,46 +36,46 @@ pub enum FieldType {
     WordlistPath = 5,
 }
 
-impl FieldType {
+impl FieldName {
     pub fn index(self) -> usize {
         match self {
-            FieldType::Name => 0,
-            FieldType::Uri => 1,
-            FieldType::Threads => 2,
-            FieldType::Recursion => 3,
-            FieldType::Timeout => 4,
-            FieldType::WordlistPath => 5,
+            FieldName::Name => 0,
+            FieldName::Uri => 1,
+            FieldName::Threads => 2,
+            FieldName::Recursion => 3,
+            FieldName::Timeout => 4,
+            FieldName::WordlistPath => 5,
         }
     }
 
-    pub fn next(self) -> FieldType {
+    pub fn next(self) -> FieldName {
         match self {
-            FieldType::Name => FieldType::Uri,
-            FieldType::Uri => FieldType::Threads,
-            FieldType::Threads => FieldType::Recursion,
-            FieldType::Recursion => FieldType::Timeout,
-            FieldType::Timeout => FieldType::WordlistPath,
-            FieldType::WordlistPath => FieldType::Name,
+            FieldName::Name => FieldName::Uri,
+            FieldName::Uri => FieldName::Threads,
+            FieldName::Threads => FieldName::Recursion,
+            FieldName::Recursion => FieldName::Timeout,
+            FieldName::Timeout => FieldName::WordlistPath,
+            FieldName::WordlistPath => FieldName::Name,
         }
     }
 
-    pub fn previous(self) -> FieldType {
+    pub fn previous(self) -> FieldName {
         match self {
-            FieldType::Name => FieldType::WordlistPath,
-            FieldType::Uri => FieldType::Name,
-            FieldType::Threads => FieldType::Uri,
-            FieldType::Recursion => FieldType::Threads,
-            FieldType::Timeout => FieldType::Recursion,
-            FieldType::WordlistPath => FieldType::Timeout,
+            FieldName::Name => FieldName::WordlistPath,
+            FieldName::Uri => FieldName::Name,
+            FieldName::Threads => FieldName::Uri,
+            FieldName::Recursion => FieldName::Threads,
+            FieldName::Timeout => FieldName::Recursion,
+            FieldName::WordlistPath => FieldName::Timeout,
         }
     }
 
     pub fn is_first(self) -> bool {
-        self == FieldType::Name
+        self == FieldName::Name
     }
 
     pub fn is_last(self) -> bool {
-        self == FieldType::WordlistPath
+        self == FieldName::WordlistPath
     }
 }
 
@@ -89,13 +92,13 @@ const NAMES: [&str; FIELDS_NUMBER] = [
 
 #[derive(Debug, PartialEq)]
 pub enum Selection {
-    Field(FieldType),
+    Field(FieldName),
     RunButton,
 }
 
 impl Default for Selection {
     fn default() -> Self {
-        Selection::Field(FieldType::default())
+        Selection::Field(FieldName::default())
     }
 }
 
@@ -109,7 +112,7 @@ impl Selection {
                 };
                 *self = Selection::Field(field.next());
             }
-            Selection::RunButton => *self = Selection::Field(FieldType::Name),
+            Selection::RunButton => *self = Selection::Field(FieldName::Name),
         }
     }
 
@@ -122,7 +125,7 @@ impl Selection {
                 }
                 *self = Selection::Field(field.previous());
             }
-            Selection::RunButton => *self = Selection::Field(FieldType::WordlistPath),
+            Selection::RunButton => *self = Selection::Field(FieldName::WordlistPath),
         }
     }
 }
@@ -158,12 +161,32 @@ impl Default for WorkerState {
             progress_all_total: Default::default(),
             progress_all_now: Default::default(),
             fields_states: [
-                FieldState::new("Unnamed", true, false),
-                FieldState::new("http://localhost", false, false),
-                FieldState::new(DEFAULT_THREADS_NUMBER.to_string().as_str(), false, true),
-                FieldState::new(DEFAULT_RECURSIVE_MODE.to_string().as_str(), false, true),
-                FieldState::new(DEFAULT_TIMEOUT.to_string().as_str(), false, true),
-                FieldState::new("/usr/share", false, false),
+                FieldState::new("Unnamed", true, false, FieldType::Normal),
+                FieldState::new("http://localhost", false, false, FieldType::Normal),
+                FieldState::new(
+                    DEFAULT_THREADS_NUMBER.to_string().as_str(),
+                    false,
+                    true,
+                    FieldType::Normal,
+                ),
+                FieldState::new(
+                    DEFAULT_RECURSIVE_MODE.to_string().as_str(),
+                    false,
+                    true,
+                    FieldType::Normal,
+                ),
+                FieldState::new(
+                    DEFAULT_TIMEOUT.to_string().as_str(),
+                    false,
+                    true,
+                    FieldType::Normal,
+                ),
+                FieldState::new(
+                    "/usr/share",
+                    false,
+                    false,
+                    FieldType::Path(PathHintState::default()),
+                ),
             ],
         }
     }
@@ -190,7 +213,7 @@ impl WorkerState {
         }
     }
 
-    pub fn switch_field_editing(&mut self, field: FieldType) {
+    pub fn switch_field_editing(&mut self, field: FieldName) {
         let ind = field.index();
         self.fields_states[ind].is_editing = !self.fields_states[ind].is_editing;
     }
@@ -240,17 +263,17 @@ impl StatefulWidget for WorkerInfo {
                 ];
 
                 Paragraph::new(Text::from_iter::<[Line; 5]>([
-                    Line::from("URI: ") + state.fields_states[FieldType::Uri.index()].get().blue(),
+                    Line::from("URI: ") + state.fields_states[FieldName::Uri.index()].get().blue(),
                     Line::from("Threads: ")
-                        + state.fields_states[FieldType::Threads.index()].get().blue(),
+                        + state.fields_states[FieldName::Threads.index()].get().blue(),
                     Line::from("Recursion depth: ")
-                        + state.fields_states[FieldType::Recursion.index()]
+                        + state.fields_states[FieldName::Recursion.index()]
                             .get()
                             .blue(),
                     Line::from("Timeout: ")
-                        + state.fields_states[FieldType::Timeout.index()].get().blue(),
+                        + state.fields_states[FieldName::Timeout.index()].get().blue(),
                     Line::from("Wordlist: ")
-                        + state.fields_states[FieldType::WordlistPath.index()]
+                        + state.fields_states[FieldName::WordlistPath.index()]
                             .get()
                             .blue(),
                 ]))
@@ -272,7 +295,7 @@ impl StatefulWidget for WorkerInfo {
                     .block(Block::bordered().title(names[2]))
                     .render(layout[2], buf);
 
-                if !state.fields_states[FieldType::Recursion.index()]
+                if !state.fields_states[FieldName::Recursion.index()]
                     .get()
                     .starts_with('0')
                 {
@@ -304,32 +327,36 @@ impl StatefulWidget for WorkerInfo {
                         Constraint::Max(3),
                         Constraint::Max(3),
                         Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Max(5),
+                        Constraint::Max(7), // FOR PATH AND HINTS
+                        Constraint::Max(5), // FOR BUTTON
                     ],
                 )
                 .areas(area);
 
-                for (ind, field_state) in state.fields_states.iter_mut().enumerate() {
-                    if field_state.is_editing {
-                        state.cursor_position = (
-                            layout[ind].x + 1 + field_state.input.cursor() as u16,
-                            layout[ind].y + 1
-                        )  
-                    }
-                    Field::new(NAMES[ind]).render(layout[ind], buf, field_state);
-                }
-
                 Paragraph::new("Run")
                     .centered()
-                    .block(Block::bordered().style(if state.selection == Selection::RunButton {
-                        Style::default().green()
-                    } else { Style::default() }))
+                    .block(
+                        Block::bordered().style(if state.selection == Selection::RunButton {
+                            Style::default().green()
+                        } else {
+                            Style::default()
+                        }),
+                    )
                     .alignment(layout::Alignment::Center)
                     .render(
                         Self::center(layout[6], Constraint::Max(40), Constraint::Length(3)),
                         buf,
                     );
+
+                for (ind, field_state) in state.fields_states.iter_mut().enumerate() {
+                    if field_state.is_editing {
+                        state.cursor_position = (
+                            layout[ind].x + 1 + field_state.input.cursor() as u16,
+                            layout[ind].y + 1,
+                        );
+                    }
+                    Field::new(NAMES[ind]).render(layout[ind], buf, field_state);
+                }
             }
         }
     }
