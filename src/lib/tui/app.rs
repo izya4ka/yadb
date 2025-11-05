@@ -7,14 +7,17 @@ use ratatui::{
     text::{Line, Text},
     widgets::{Block, BorderType, Borders, List, ListItem, ListState},
 };
-use tui_input::InputRequest;
 use std::{
-    sync::mpsc::{self, Receiver}, thread::{self}, time::Duration
+    sync::mpsc::{self, Receiver},
+    thread::{self},
+    time::Duration,
 };
+use tui_input::InputRequest;
 
 use crate::lib::{
     tui::widgets::{
-        popup::Popup, worker_info::{FieldType, Selection, WorkerInfo, WorkerState, WorkerVariant}
+        popup::Popup,
+        worker_info::{FieldName, Selection, WorkerInfo, WorkerState, WorkerVariant},
     },
     worker::{
         builder::{BuilderError, WorkerBuilder},
@@ -59,7 +62,7 @@ impl Default for WorkerRx {
 enum InputMode {
     #[default]
     Normal,
-    Editing
+    Editing,
 }
 
 /// The main application which holds the state and logic of the application.
@@ -75,7 +78,7 @@ pub struct App {
     show_help_popup: bool,
     worker_list_state: ListState,
     builder_error: Option<BuilderError>,
-    input_mode: InputMode
+    input_mode: InputMode,
 }
 
 impl App {
@@ -139,7 +142,6 @@ impl App {
                             }
                         },
                         WorkerMessage::Log(loglevel, str) => {
-                            
                             let log = &mut self.workers_info_state[sel].log;
                             match loglevel {
                                 crate::lib::logger::traits::LogLevel::WARN => log.push_front("[WARN] ".to_owned() + &str),
@@ -214,7 +216,9 @@ impl App {
                     _ => String::default(),
                 };
                 let mut item = ListItem::new(formated_name);
-                if let Some(selected_index) = self.worker_list_state.selected() && selected_index == i  {
+                if let Some(selected_index) = self.worker_list_state.selected()
+                    && selected_index == i
+                {
                     item = item.reversed().blue();
                 }
                 item
@@ -258,7 +262,6 @@ impl App {
 
     /// Handles the key events and updates the state of [`App`].
     fn on_key_event(&mut self, key: KeyEvent) {
-
         if (key.modifiers, key.code) == (KeyModifiers::CONTROL, KeyCode::Char('c')) {
             self.quit();
             return;
@@ -282,10 +285,10 @@ impl App {
             (_, KeyCode::Char('a')) => {
                 self.workers_info_state.push(WorkerState::default());
                 self.workers.push(WorkerRx::default());
-                if self.worker_list_state.selected().is_none(){
+                if self.worker_list_state.selected().is_none() {
                     self.worker_list_state.select(Some(0));
                 }
-            },
+            }
             (_, KeyCode::Down) => {
                 if self.workers_info_state.is_empty() {
                     return;
@@ -311,15 +314,15 @@ impl App {
                     self.workers_info_state.remove(sel);
                     self.workers.remove(sel);
                 }
-            },
+            }
             (_, KeyCode::Char('h')) => {
                 self.show_help_popup = !self.show_help_popup;
-            },
+            }
             (_, KeyCode::Right | KeyCode::Enter | KeyCode::Tab) => {
                 if !self.workers_info_state.is_empty() {
                     self.switch_window()
                 }
-            },
+            }
             _ => {}
         }
     }
@@ -330,7 +333,7 @@ impl App {
             match (key.modifiers, key.code) {
                 (_, KeyCode::Char('h')) => {
                     self.show_help_popup = !self.show_help_popup;
-                },
+                }
                 (_, KeyCode::Tab | KeyCode::Left) => self.switch_window(),
                 (_, KeyCode::Down) => worker_state.set_next_selection(),
                 (_, KeyCode::Up) => worker_state.set_previous_selection(),
@@ -344,58 +347,57 @@ impl App {
                         Selection::Field(field) => {
                             worker_state.switch_field_editing(field);
                             self.switch_input_mode();
-                        },
+                        }
                         Selection::RunButton => {
                             worker_state.do_build = true;
-                        },
+                        }
                     }
                 }
                 _ => {}
             };
 
             if self.workers_info_state[sel].do_build
-                && let WorkerType::Builder(builder) = &mut self.workers[sel].worker_type {
-                    let builder_clone = builder
-                        .clone()
-                        .recursive(
-                            self.workers_info_state[sel]
-                                .fields_states[FieldType::Recursion.index()]
-                                .get()
-                                .parse()
-                                .unwrap(),
-                        )
-                        .threads(
-                            self.workers_info_state[sel]
-                                .fields_states[FieldType::Threads.index()]
-                                .get()
-                                .parse()
-                                .unwrap(),
-                        )
-                        .timeout(
-                            self.workers_info_state[sel]
-                                .fields_states[FieldType::Timeout.index()]
-                                .get()
-                                .parse()
-                                .unwrap(),
-                        )
-                        .uri(self.workers_info_state[sel].fields_states[FieldType::Uri.index()]
-                                .get())
-                        .wordlist(self.workers_info_state[sel].fields_states[FieldType::WordlistPath.index()]
-                                .get());
+                && let WorkerType::Builder(builder) = &mut self.workers[sel].worker_type
+            {
+                let builder_clone = builder
+                    .clone()
+                    .recursive(
+                        self.workers_info_state[sel].fields_states[FieldName::Recursion.index()]
+                            .get()
+                            .parse()
+                            .unwrap(),
+                    )
+                    .threads(
+                        self.workers_info_state[sel].fields_states[FieldName::Threads.index()]
+                            .get()
+                            .parse()
+                            .unwrap(),
+                    )
+                    .timeout(
+                        self.workers_info_state[sel].fields_states[FieldName::Timeout.index()]
+                            .get()
+                            .parse()
+                            .unwrap(),
+                    )
+                    .uri(self.workers_info_state[sel].fields_states[FieldName::Uri.index()].get())
+                    .wordlist(
+                        self.workers_info_state[sel].fields_states[FieldName::WordlistPath.index()]
+                            .get(),
+                    );
 
-                    let worker_result = builder_clone.build();
-                    match worker_result {
-                        Ok(worker) => {
-                            self.workers[sel].worker_type = WorkerType::Worker;
-                            thread::spawn(move || worker.run());
-                            self.workers_info_state[sel].worker = WorkerVariant::Worker(false);
-                        }
-                        Err(err) => {
-                            self.builder_error = Some(err.clone());
-                            self.workers_info_state[sel].do_build = false;
-                        }
+                let worker_result = builder_clone.build();
+                match worker_result {
+                    Ok(worker) => {
+                        self.workers[sel].worker_type = WorkerType::Worker;
+                        thread::spawn(move || worker.run());
+                        self.workers_info_state[sel].worker = WorkerVariant::Worker(false);
+                    }
+                    Err(err) => {
+                        self.builder_error = Some(err.clone());
+                        self.workers_info_state[sel].do_build = false;
                     }
                 }
+            }
         }
     }
     fn handle_editing_input(&mut self, key: KeyEvent) {
@@ -415,24 +417,29 @@ impl App {
                                 } else {
                                     field_state.input.handle(InputRequest::InsertChar(c));
                                 }
-                            },
+                            }
                             (KeyModifiers::CONTROL, KeyCode::Right) => {
                                 field_state.input.handle(InputRequest::GoToEnd);
-                            },
+                            }
                             (KeyModifiers::CONTROL, KeyCode::Left) => {
                                 field_state.input.handle(InputRequest::GoToStart);
-                            },
+                            }
                             (KeyModifiers::ALT, KeyCode::Backspace) => {
                                 field_state.input.handle(InputRequest::DeletePrevWord);
-                            },
-                            (_, KeyCode::Backspace) => {field_state.input.handle(InputRequest::DeletePrevChar);},
-                            (_, KeyCode::Delete) => {field_state.input.handle(InputRequest::DeleteNextChar);},
+                            }
+                            (_, KeyCode::Tab) => {}
+                            (_, KeyCode::Backspace) => {
+                                field_state.input.handle(InputRequest::DeletePrevChar);
+                            }
+                            (_, KeyCode::Delete) => {
+                                field_state.input.handle(InputRequest::DeleteNextChar);
+                            }
                             (_, KeyCode::Left) => {
                                 field_state.input.handle(InputRequest::GoToPrevChar);
-                            },
+                            }
                             (_, KeyCode::Right) => {
                                 field_state.input.handle(InputRequest::GoToNextChar);
-                            },
+                            }
                             (_, KeyCode::Esc | KeyCode::Enter) => {
                                 state.switch_field_editing(f);
                                 self.switch_input_mode();
@@ -441,7 +448,7 @@ impl App {
                         };
                     };
                 }
-            },
+            }
         };
     }
 
@@ -463,7 +470,7 @@ impl App {
             CurrentWindow::Info => Text::from(vec![
                 " <TAB> / <LEFT> / <RIGHT>".bold().blue() + " - Switch tabs".into(),
                 " <UP> / <DOWN>".bold().blue() + " - Move focus".into(),
-                " <Enter>".bold().blue() + " - Edit property or press button".into(), 
+                " <Enter>".bold().blue() + " - Edit property or press button".into(),
             ]),
         };
         let popup = Popup::new(" Help ".to_string(), help_message);
@@ -471,10 +478,10 @@ impl App {
     }
 
     fn render_error_popup(&mut self, frame: &mut Frame, err: BuilderError) {
-            let error_message = Text::from(err.to_string());
-            let popup = Popup::new(" Error ".to_string(), error_message);
+        let error_message = Text::from(err.to_string());
+        let popup = Popup::new(" Error ".to_string(), error_message);
 
-            frame.render_widget(popup, frame.area());
+        frame.render_widget(popup, frame.area());
     }
 
     fn switch_input_mode(&mut self) {
@@ -494,4 +501,3 @@ impl App {
         self.running = false;
     }
 }
-

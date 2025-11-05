@@ -4,6 +4,14 @@ use ratatui::{
 };
 use tui_input::Input;
 
+use crate::lib::tui::widgets::path::PathHint;
+
+#[derive(Debug, PartialEq)]
+pub enum FieldType {
+    Normal,
+    Path,
+}
+
 #[derive(Debug, Default)]
 pub struct FieldState {
     pub input: Input,
@@ -29,6 +37,7 @@ impl FieldState {
 
 pub struct Field<'a> {
     title: &'a str,
+    variant: FieldType,
 }
 
 impl StatefulWidget for Field<'_> {
@@ -60,11 +69,17 @@ impl StatefulWidget for Field<'_> {
         }
 
         input.render(area, buf);
+
+        if self.variant == FieldType::Path && state.is_editing {
+            let mut box_area = area.clone();
+            box_area.y = box_area.y + 2;
+            PathHint::new(state.get()).render(box_area, buf);
+        }
     }
 }
 
 impl<'a> Field<'a> {
-    pub fn new(title: &'a str) -> Field<'a> {
-        Self { title }
+    pub fn new(title: &'a str, variant: FieldType) -> Field<'a> {
+        Self { title, variant }
     }
 }

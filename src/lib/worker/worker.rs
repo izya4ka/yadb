@@ -10,7 +10,7 @@ use ureq::Agent;
 use url::Url;
 
 use crate::lib::logger::traits::LogLevel;
-use crate::lib::worker::messages::{WorkerMessage, ProgressChangeMessage, ProgressMessage};
+use crate::lib::worker::messages::{ProgressChangeMessage, ProgressMessage, WorkerMessage};
 
 #[derive(Error, Debug, Clone)]
 pub enum WorkerError {
@@ -169,11 +169,10 @@ impl Worker {
                                 //     style(&url).red()
                                 // ));
                                 message_sender
-                                    .send(WorkerMessage::Log(LogLevel::WARN,
-                                        format!(
-                                            "Error while sending request to {url}: {e}",
-                                        )),
-                                    )
+                                    .send(WorkerMessage::Log(
+                                        LogLevel::WARN,
+                                        format!("Error while sending request to {url}: {e}",),
+                                    ))
                                     .expect("SENDER ERROR")
                             }
                         }
@@ -183,7 +182,7 @@ impl Worker {
                         message_sender
                             .send(WorkerMessage::advance_current())
                             .expect("SENDER ERROR");
-                    
+
                         message_sender
                             .send(WorkerMessage::advance_total())
                             .expect("SENDER ERROR");
