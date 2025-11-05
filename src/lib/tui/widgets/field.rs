@@ -1,5 +1,7 @@
 use ratatui::{
-    layout::{self, Constraint, Layout, Rect}, style::{Style, Stylize}, widgets::{Block, Paragraph, StatefulWidget, Widget}
+    layout::{self, Constraint, Layout, Rect},
+    style::{Style, Stylize},
+    widgets::{Block, Paragraph, StatefulWidget, Widget},
 };
 use tui_input::Input;
 
@@ -55,10 +57,8 @@ impl StatefulWidget for Field<'_> {
         buf: &mut ratatui::prelude::Buffer,
         state: &mut Self::State,
     ) {
-
-        let layout: [Rect; 1] = Layout::new(layout::Direction::Vertical, [
-            Constraint::Length(3)
-        ]).areas(area);
+        let layout: [Rect; 1] =
+            Layout::new(layout::Direction::Vertical, [Constraint::Length(3)]).areas(area);
 
         let scroll = state.input.visual_scroll(layout[0].width as usize);
         let mut input = Paragraph::new(state.input.value())

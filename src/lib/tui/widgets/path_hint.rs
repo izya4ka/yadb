@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use ratatui::{
     layout::{self, Constraint, Layout, Rect},
@@ -98,7 +98,7 @@ impl PathHintState {
     }
 
     pub fn get_selected(&mut self) -> Option<&String> {
-        return self.possible_paths.get(self.selected);
+        self.possible_paths.get(self.selected)
     }
 
     pub fn next(&mut self) {

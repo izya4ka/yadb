@@ -12,7 +12,7 @@ use crate::lib::{
         app::{LOG_MAX, MESSAGES_MAX},
         widgets::{
             field::{Field, FieldState, FieldType},
-            path_hint::{PathHint, PathHintState},
+            path_hint::PathHintState,
         },
     },
     worker::builder::{DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT},
