@@ -16,6 +16,7 @@ use tui_input::InputRequest;
 
 use crate::lib::{
     tui::widgets::{
+        field::FieldType,
         popup::Popup,
         worker_info::{FieldName, Selection, WorkerInfo, WorkerState, WorkerVariant},
     },
@@ -91,8 +92,8 @@ impl App {
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         self.running = true;
         while self.running {
-            terminal.draw(|frame| self.render(frame))?;
             self.handle_crossterm_events()?;
+            terminal.draw(|frame| self.render(frame))?;
 
             for (sel, worker_state) in self.workers.iter_mut().enumerate() {
                 if let Ok(msg) = worker_state.rx.try_recv() {
@@ -416,6 +417,10 @@ impl App {
                                     }
                                 } else {
                                     field_state.input.handle(InputRequest::InsertChar(c));
+                                    if let FieldType::Path(hint_state) = &mut field_state.field_type
+                                    {
+                                        hint_state.get_hints(field_state.input.value());
+                                    }
                                 }
                             }
                             (KeyModifiers::CONTROL, KeyCode::Right) => {
@@ -427,8 +432,35 @@ impl App {
                             (KeyModifiers::ALT, KeyCode::Backspace) => {
                                 field_state.input.handle(InputRequest::DeletePrevWord);
                             }
-                            (_, KeyCode::Tab) => {}
+                            (_, KeyCode::Tab) => {
+                                if let FieldType::Path(hint_state) = &mut field_state.field_type {
+                                    if !field_state.input.value().ends_with('/')
+                                        && !hint_state.possible_paths.is_empty()
+                                    {
+                                        field_state.input.handle(InputRequest::DeletePrevWord);
+                                    }
+                                    if let Some(str) = hint_state.get_selected() {
+                                        for ch in str.chars() {
+                                            field_state.input.handle(InputRequest::InsertChar(ch));
+                                        }
+                                    }
+                                    hint_state.possible_paths.clear();
+                                }
+                            }
+                            (_, KeyCode::Down) => {
+                                if let FieldType::Path(hint_state) = &mut field_state.field_type {
+                                    hint_state.next();
+                                }
+                            }
+                            (_, KeyCode::Up) => {
+                                if let FieldType::Path(hint_state) = &mut field_state.field_type {
+                                    hint_state.previous();
+                                }
+                            }
                             (_, KeyCode::Backspace) => {
+                                if let FieldType::Path(hint_state) = &mut field_state.field_type {
+                                    hint_state.get_hints(field_state.input.value());
+                                }
                                 field_state.input.handle(InputRequest::DeletePrevChar);
                             }
                             (_, KeyCode::Delete) => {

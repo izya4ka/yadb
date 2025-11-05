@@ -12,7 +12,7 @@ use crate::lib::{
         app::{LOG_MAX, MESSAGES_MAX},
         widgets::{
             field::{Field, FieldState, FieldType},
-            path::PathHint,
+            path_hint::{PathHint, PathHintState},
         },
     },
     worker::builder::{DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT},
@@ -161,12 +161,32 @@ impl Default for WorkerState {
             progress_all_total: Default::default(),
             progress_all_now: Default::default(),
             fields_states: [
-                FieldState::new("Unnamed", true, false),
-                FieldState::new("http://localhost", false, false),
-                FieldState::new(DEFAULT_THREADS_NUMBER.to_string().as_str(), false, true),
-                FieldState::new(DEFAULT_RECURSIVE_MODE.to_string().as_str(), false, true),
-                FieldState::new(DEFAULT_TIMEOUT.to_string().as_str(), false, true),
-                FieldState::new("/usr/share", false, false),
+                FieldState::new("Unnamed", true, false, FieldType::Normal),
+                FieldState::new("http://localhost", false, false, FieldType::Normal),
+                FieldState::new(
+                    DEFAULT_THREADS_NUMBER.to_string().as_str(),
+                    false,
+                    true,
+                    FieldType::Normal,
+                ),
+                FieldState::new(
+                    DEFAULT_RECURSIVE_MODE.to_string().as_str(),
+                    false,
+                    true,
+                    FieldType::Normal,
+                ),
+                FieldState::new(
+                    DEFAULT_TIMEOUT.to_string().as_str(),
+                    false,
+                    true,
+                    FieldType::Normal,
+                ),
+                FieldState::new(
+                    "/usr/share",
+                    false,
+                    false,
+                    FieldType::Path(PathHintState::default()),
+                ),
             ],
         }
     }
@@ -299,7 +319,7 @@ impl StatefulWidget for WorkerInfo {
                     .render(layout[4], buf);
             }
             WorkerVariant::Builder => {
-                let layout: [Rect; FIELDS_NUMBER + 2] = Layout::new(
+                let layout: [Rect; FIELDS_NUMBER + 1] = Layout::new(
                     layout::Direction::Vertical,
                     [
                         Constraint::Max(3),
@@ -307,26 +327,11 @@ impl StatefulWidget for WorkerInfo {
                         Constraint::Max(3),
                         Constraint::Max(3),
                         Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Min(7), // FOR PATH HINT
+                        Constraint::Max(7), // FOR PATH AND HINTS
                         Constraint::Max(5), // FOR BUTTON
                     ],
                 )
                 .areas(area);
-
-                for (ind, field_state) in state.fields_states.iter_mut().enumerate() {
-                    if field_state.is_editing {
-                        state.cursor_position = (
-                            layout[ind].x + 1 + field_state.input.cursor() as u16,
-                            layout[ind].y + 1,
-                        );
-
-                        if FieldName::WordlistPath.index() == ind {
-                            PathHint::new(field_state.get()).render(layout[6], buf);
-                        }
-                    }
-                    Field::new(NAMES[ind], FieldType::Normal).render(layout[ind], buf, field_state);
-                }
 
                 Paragraph::new("Run")
                     .centered()
@@ -339,9 +344,19 @@ impl StatefulWidget for WorkerInfo {
                     )
                     .alignment(layout::Alignment::Center)
                     .render(
-                        Self::center(layout[7], Constraint::Max(40), Constraint::Length(3)),
+                        Self::center(layout[6], Constraint::Max(40), Constraint::Length(3)),
                         buf,
                     );
+
+                for (ind, field_state) in state.fields_states.iter_mut().enumerate() {
+                    if field_state.is_editing {
+                        state.cursor_position = (
+                            layout[ind].x + 1 + field_state.input.cursor() as u16,
+                            layout[ind].y + 1,
+                        );
+                    }
+                    Field::new(NAMES[ind]).render(layout[ind], buf, field_state);
+                }
             }
         }
     }
