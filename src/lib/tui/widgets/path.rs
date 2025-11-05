@@ -1,11 +1,8 @@
-use std::{
-    hint,
-    path::{self, Path, PathBuf},
-};
+use std::path::Path;
 
 use ratatui::{
     layout::{self, Constraint, Layout, Rect},
-    style::{Color, Style, Stylize},
+    style::{Style, Stylize},
     text::{Line, Text},
     widgets::{Block, Paragraph, Widget},
 };
@@ -32,7 +29,7 @@ impl Widget for PathHint<'_> {
         let strs = self.get_hints();
 
         if !strs.is_empty() {
-            let mut lines: Vec<Line<'_>> = strs.into_iter().map(|s| Line::from(s)).collect();
+            let mut lines: Vec<Line<'_>> = strs.into_iter().map(Line::from).collect();
             lines[0] = lines[0].clone().style(Style::new().blue().reversed());
 
             Paragraph::new(Text::from_iter(lines))
@@ -47,36 +44,35 @@ impl<'a> PathHint<'a> {
         let mut hints: Vec<String> = Vec::new();
 
         let path = Path::new(self.current_path);
-        if path.is_dir() {
-            if let Ok(read_dir) = path.read_dir() {
-                for entry in read_dir
-                    .filter_map(|e| e.ok())
-                    .filter_map(|e| e.file_name().into_string().ok())
-                    .take(5)
-                {
-                    hints.push(entry);
-                }
-            } else {
-                return hints;
+        if path.is_dir()
+            && let Ok(read_dir) = path.read_dir()
+        {
+            for entry in read_dir
+                .filter_map(|e| e.ok())
+                .filter_map(|e| e.file_name().into_string().ok())
+                .take(5)
+            {
+                hints.push(entry);
             }
+        } else {
             return hints;
         }
 
-        if let Some(parent) = path.parent() {
-            if let Ok(read_dir) = parent.read_dir() {
-                for entry in read_dir
-                    .filter_map(|e| e.ok())
-                    .filter_map(|e| e.file_name().into_string().ok())
-                    .take(5)
-                {
-                    if entry.starts_with(path.file_name().unwrap().to_str().unwrap()) {
-                        hints.push(entry);
-                    }
+        if let Some(parent) = path.parent()
+            && let Ok(read_dir) = parent.read_dir()
+        {
+            for entry in read_dir
+                .filter_map(|e| e.ok())
+                .filter_map(|e| e.file_name().into_string().ok())
+                .take(5)
+            {
+                if entry.starts_with(path.file_name().unwrap().to_str().unwrap()) {
+                    hints.push(entry);
                 }
             }
         }
 
-        return hints;
+        hints
     }
 
     pub fn new(current_path: &'a str) -> Self {

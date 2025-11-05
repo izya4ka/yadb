@@ -71,8 +71,8 @@ impl StatefulWidget for Field<'_> {
         input.render(area, buf);
 
         if self.variant == FieldType::Path && state.is_editing {
-            let mut box_area = area.clone();
-            box_area.y = box_area.y + 2;
+            let mut box_area = area;
+            box_area.y += 2;
             PathHint::new(state.get()).render(box_area, buf);
         }
     }

@@ -7,7 +7,7 @@ use anyhow::Result;
 use thiserror::Error;
 use url::{ParseError, Url};
 
-use crate::lib::worker::{messages::WorkerMessage, worker::Worker};
+use crate::lib::worker::{messages::WorkerMessage, unit::Worker};
 
 pub const DEFAULT_THREADS_NUMBER: usize = 50;
 pub const DEFAULT_RECURSIVE_MODE: usize = 0;
