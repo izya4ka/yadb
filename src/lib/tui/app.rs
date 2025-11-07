@@ -53,7 +53,7 @@ impl Default for WorkerRx {
         let (tx, rx) = mpsc::channel::<WorkerMessage>();
 
         Self {
-            worker_type: WorkerType::Builder(WorkerBuilder::new().message_sender(tx.into())),
+            worker_type: WorkerType::Builder(WorkerBuilder::default().message_sender(tx.into())),
             rx,
         }
     }
@@ -384,7 +384,8 @@ impl App {
                     .wordlist(
                         self.workers_info_state[sel].fields_states[FieldName::WordlistPath.index()]
                             .get(),
-                    );
+                    )
+                    .proxy_uri(self.workers_info_state[sel].fields_states[FieldName::ProxyUrl.index()].get());
 
                 let worker_result = builder_clone.build();
                 match worker_result {

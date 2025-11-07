@@ -6,7 +6,7 @@ use std::thread::{self, ScopedJoinHandle};
 use std::time::Duration;
 use std::{fs::File, path::PathBuf};
 use thiserror::Error;
-use ureq::Agent;
+use ureq::{Agent, Proxy};
 use url::Url;
 
 use crate::lib::logger::traits::LogLevel;
@@ -26,6 +26,7 @@ pub struct Worker {
     message_sender: Arc<Sender<WorkerMessage>>,
     uri: Url,
     timeout: usize,
+    proxy_url: Option<Url>,
 }
 
 impl Worker {
@@ -36,6 +37,7 @@ impl Worker {
         wordlist: PathBuf,
         uri: Url,
         message_sender: Arc<Sender<WorkerMessage>>,
+        proxy_uri: Option<Url>
     ) -> Worker {
         Worker {
             threads,
@@ -44,6 +46,7 @@ impl Worker {
             message_sender,
             uri,
             timeout,
+            proxy_url: proxy_uri
         }
     }
 
@@ -93,11 +96,17 @@ impl Worker {
 
         let mut result: Vec<Url> = Vec::new();
 
-        let agent: Agent = Agent::config_builder()
+        let mut agent= Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(self.timeout.try_into().unwrap())))
-            .http_status_as_error(false)
-            .build()
-            .into();
+            .http_status_as_error(false);
+
+        if let Some(proxy_url) = &self.proxy_url {
+            let proxy = Proxy::new(proxy_url.as_str()).ok();
+            agent = agent.proxy(proxy);
+        }
+
+        let agent: Agent = agent.build().into();
+
         let client = Arc::new(agent);
 
         thread::scope(|s| {

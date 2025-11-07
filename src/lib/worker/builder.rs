@@ -40,29 +40,19 @@ pub enum BuilderError {
     SenderChannelNotSpecified,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct WorkerBuilder {
     pub threads: Option<usize>,
     pub recursion: Option<usize>,
     pub timeout: Option<usize>,
     pub wordlist: Option<PathBuf>,
     pub uri: Option<Url>,
+    pub proxy_uri: Option<Url>,
     error: Option<BuilderError>,
     message_sender: Option<Arc<Sender<WorkerMessage>>>,
 }
 
 impl WorkerBuilder {
-    pub fn new() -> Self {
-        WorkerBuilder {
-            threads: None,
-            recursion: None,
-            wordlist: None,
-            uri: None,
-            error: None,
-            message_sender: None,
-            timeout: None,
-        }
-    }
 
     pub fn threads(mut self, threads: usize) -> Self {
         if self.error.is_some() {
@@ -140,6 +130,24 @@ impl WorkerBuilder {
         self
     }
 
+    pub fn proxy_uri(mut self, proxy_uri:  &str) -> Self {
+        if self.error.is_some() {
+            return self;
+        }
+
+        let parsed_uri = match Url::parse(proxy_uri) {
+            Ok(url) => url,
+            Err(err) => {
+                self.error = Some(BuilderError::HostParseError(err));
+                return self;
+            }
+        };
+
+        self.proxy_uri = Some(parsed_uri);
+
+        self
+    }
+
     pub fn build(self) -> Result<Worker, BuilderError> {
         if let Some(err) = self.error {
             return Err(err);
@@ -157,6 +165,8 @@ impl WorkerBuilder {
             .message_sender
             .ok_or(BuilderError::SenderChannelNotSpecified)?;
 
+        let proxy_uri = self.proxy_uri;
+
         Ok(Worker::new(
             threads,
             recursion_depth,
@@ -164,12 +174,7 @@ impl WorkerBuilder {
             wordlist,
             uri,
             message_sender,
+            proxy_uri
         ))
-    }
-}
-
-impl Default for WorkerBuilder {
-    fn default() -> Self {
-        Self::new()
     }
 }

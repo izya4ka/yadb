@@ -101,7 +101,7 @@ fn main() {
 
     let (tx, rx) = mpsc::channel::<WorkerMessage>();
 
-    let worker = WorkerBuilder::new()
+    let worker = WorkerBuilder::default()
         .recursive(args.recursion)
         .threads(args.threads)
         .timeout(args.timeout)
