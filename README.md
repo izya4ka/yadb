@@ -50,7 +50,7 @@ yadb-tui
 - [ ] Output in HTML/JSON formats
 - [ ] Better TUI
   - [ ] Menu
-- [ ] HTTP Proxy (+ socks???)
+- [x] Proxy support
 - [ ] Custom request
 - [ ] Keyword fuzzing
   - [ ] In URL
