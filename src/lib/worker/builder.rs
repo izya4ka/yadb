@@ -15,14 +15,11 @@ pub const DEFAULT_TIMEOUT: usize = 5;
 
 #[derive(Error, Debug, Clone)]
 pub enum BuilderError {
-    #[error("Can't parse host: {0}")]
-    HostParseError(#[from] ParseError),
+    #[error("Can't parse URL: {0}")]
+    UrlParseError(#[from] ParseError),
 
-    #[error("Host not specified")]
-    HostNotSpecified,
-
-    #[error("Port not specified")]
-    PortNotSpecified,
+    #[error("Target not specified")]
+    TargetNotSpecified,
 
     #[error("Wordlist not specified")]
     WordlistNotSpecified,
@@ -40,30 +37,19 @@ pub enum BuilderError {
     SenderChannelNotSpecified,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct WorkerBuilder {
     pub threads: Option<usize>,
     pub recursion: Option<usize>,
     pub timeout: Option<usize>,
     pub wordlist: Option<PathBuf>,
     pub uri: Option<Url>,
+    pub proxy_uri: Option<Url>,
     error: Option<BuilderError>,
     message_sender: Option<Arc<Sender<WorkerMessage>>>,
 }
 
 impl WorkerBuilder {
-    pub fn new() -> Self {
-        WorkerBuilder {
-            threads: None,
-            recursion: None,
-            wordlist: None,
-            uri: None,
-            error: None,
-            message_sender: None,
-            timeout: None,
-        }
-    }
-
     pub fn threads(mut self, threads: usize) -> Self {
         if self.error.is_some() {
             return self;
@@ -130,7 +116,7 @@ impl WorkerBuilder {
         let parsed_uri = match Url::parse(uri) {
             Ok(url) => url,
             Err(err) => {
-                self.error = Some(BuilderError::HostParseError(err));
+                self.error = Some(BuilderError::UrlParseError(err));
                 return self;
             }
         };
@@ -140,12 +126,30 @@ impl WorkerBuilder {
         self
     }
 
+    pub fn proxy_url(mut self, proxy_uri: &str) -> Self {
+        if self.error.is_some() || proxy_uri.is_empty() {
+            return self;
+        }
+
+        let parsed_uri = match Url::parse(proxy_uri) {
+            Ok(url) => url,
+            Err(err) => {
+                self.error = Some(BuilderError::UrlParseError(err));
+                return self;
+            }
+        };
+
+        self.proxy_uri = Some(parsed_uri);
+
+        self
+    }
+
     pub fn build(self) -> Result<Worker, BuilderError> {
         if let Some(err) = self.error {
             return Err(err);
         }
 
-        let uri = self.uri.ok_or(BuilderError::HostNotSpecified)?;
+        let uri = self.uri.ok_or(BuilderError::TargetNotSpecified)?;
 
         let threads = self.threads.unwrap_or(DEFAULT_THREADS_NUMBER);
         let recursion_depth = self.recursion.unwrap_or(DEFAULT_RECURSIVE_MODE);
@@ -157,6 +161,8 @@ impl WorkerBuilder {
             .message_sender
             .ok_or(BuilderError::SenderChannelNotSpecified)?;
 
+        let proxy_uri = self.proxy_uri;
+
         Ok(Worker::new(
             threads,
             recursion_depth,
@@ -164,12 +170,7 @@ impl WorkerBuilder {
             wordlist,
             uri,
             message_sender,
+            proxy_uri,
         ))
-    }
-}
-
-impl Default for WorkerBuilder {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -34,6 +34,7 @@ pub enum FieldName {
     Recursion = 3,
     Timeout = 4,
     WordlistPath = 5,
+    ProxyUrl = 6,
 }
 
 impl FieldName {
@@ -45,6 +46,7 @@ impl FieldName {
             FieldName::Recursion => 3,
             FieldName::Timeout => 4,
             FieldName::WordlistPath => 5,
+            FieldName::ProxyUrl => 6,
         }
     }
 
@@ -55,18 +57,20 @@ impl FieldName {
             FieldName::Threads => FieldName::Recursion,
             FieldName::Recursion => FieldName::Timeout,
             FieldName::Timeout => FieldName::WordlistPath,
-            FieldName::WordlistPath => FieldName::Name,
+            FieldName::WordlistPath => FieldName::ProxyUrl,
+            FieldName::ProxyUrl => FieldName::Name,
         }
     }
 
     pub fn previous(self) -> FieldName {
         match self {
-            FieldName::Name => FieldName::WordlistPath,
+            FieldName::Name => FieldName::ProxyUrl,
             FieldName::Uri => FieldName::Name,
             FieldName::Threads => FieldName::Uri,
             FieldName::Recursion => FieldName::Threads,
             FieldName::Timeout => FieldName::Recursion,
             FieldName::WordlistPath => FieldName::Timeout,
+            FieldName::ProxyUrl => FieldName::WordlistPath,
         }
     }
 
@@ -75,11 +79,11 @@ impl FieldName {
     }
 
     pub fn is_last(self) -> bool {
-        self == FieldName::WordlistPath
+        self == FieldName::ProxyUrl
     }
 }
 
-const FIELDS_NUMBER: usize = 6;
+const FIELDS_NUMBER: usize = 7;
 
 const NAMES: [&str; FIELDS_NUMBER] = [
     " Name ",
@@ -88,6 +92,7 @@ const NAMES: [&str; FIELDS_NUMBER] = [
     " Recursion depth ",
     " Max timeout ",
     " Wordlist path ",
+    " Proxy URL ",
 ];
 
 #[derive(Debug, PartialEq)]
@@ -187,6 +192,7 @@ impl Default for WorkerState {
                     false,
                     FieldType::Path(PathHintState::default()),
                 ),
+                FieldState::new("", false, false, FieldType::Normal),
             ],
         }
     }
@@ -319,19 +325,15 @@ impl StatefulWidget for WorkerInfo {
                     .render(layout[4], buf);
             }
             WorkerVariant::Builder => {
-                let layout: [Rect; FIELDS_NUMBER + 1] = Layout::new(
-                    layout::Direction::Vertical,
-                    [
-                        Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Max(7), // FOR PATH AND HINTS
-                        Constraint::Max(5), // FOR BUTTON
-                    ],
-                )
-                .areas(area);
+                let constraints: [Constraint; FIELDS_NUMBER + 1] = std::array::from_fn(|i| {
+                    if i == FieldName::WordlistPath.index() && state.fields_states[i].is_editing {
+                        return Constraint::Length(7);
+                    }
+                    Constraint::Length(3)
+                });
+
+                let layout: [Rect; FIELDS_NUMBER + 1] =
+                    Layout::new(layout::Direction::Vertical, constraints).areas(area);
 
                 Paragraph::new("Run")
                     .centered()
@@ -344,7 +346,11 @@ impl StatefulWidget for WorkerInfo {
                     )
                     .alignment(layout::Alignment::Center)
                     .render(
-                        Self::center(layout[6], Constraint::Max(40), Constraint::Length(3)),
+                        Self::center(
+                            layout[FIELDS_NUMBER],
+                            Constraint::Max(40),
+                            Constraint::Length(3),
+                        ),
                         buf,
                     );
 

@@ -41,9 +41,13 @@ struct Args {
     #[arg(short, long)]
     wordlist: String,
 
-    /// Target URI
+    /// Target URL
     #[arg(short, long)]
-    uri: String,
+    target_url: String,
+
+    /// Proxy URL
+    #[arg(short, long)]
+    proxy_url: Option<String>,
 
     /// Output file
     #[arg(short, long)]
@@ -63,7 +67,11 @@ fn main() {
         style(args.timeout.to_string()).cyan()
     );
     println!("Wordlist path: {}", style(args.wordlist.to_string()).cyan());
-    println!("Target: {}", style(args.uri.to_string()).cyan());
+    println!("Target: {}", style(args.target_url.to_string()).cyan());
+    if let Some(proxy_url) = args.proxy_url.as_ref() {
+        println!("Proxy: {}\n", style(proxy_url.to_string()).cyan())
+    }
+
     if let Some(output) = args.output.as_ref() {
         println!("Output: {}\n", style(output.to_string()).cyan());
     }
@@ -101,14 +109,19 @@ fn main() {
 
     let (tx, rx) = mpsc::channel::<WorkerMessage>();
 
-    let worker = WorkerBuilder::new()
+    let mut worker = WorkerBuilder::default()
         .recursive(args.recursion)
         .threads(args.threads)
         .timeout(args.timeout)
-        .uri(&args.uri)
+        .uri(&args.target_url)
         .message_sender(tx.into())
-        .wordlist(&args.wordlist)
-        .build();
+        .wordlist(&args.wordlist);
+
+    if let Some(proxy_url) = args.proxy_url.as_ref() {
+        worker = worker.proxy_url(proxy_url);
+    }
+
+    let worker = worker.build();
 
     match worker {
         Ok(buster) => {

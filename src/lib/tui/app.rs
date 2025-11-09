@@ -39,7 +39,7 @@ enum CurrentWindow {
 #[derive(Debug)]
 enum WorkerType {
     Worker,
-    Builder(WorkerBuilder),
+    Builder(Box<WorkerBuilder>),
 }
 
 #[derive(Debug)]
@@ -53,7 +53,9 @@ impl Default for WorkerRx {
         let (tx, rx) = mpsc::channel::<WorkerMessage>();
 
         Self {
-            worker_type: WorkerType::Builder(WorkerBuilder::new().message_sender(tx.into())),
+            worker_type: WorkerType::Builder(Box::new(
+                WorkerBuilder::default().message_sender(tx.into()),
+            )),
             rx,
         }
     }
@@ -383,6 +385,10 @@ impl App {
                     .uri(self.workers_info_state[sel].fields_states[FieldName::Uri.index()].get())
                     .wordlist(
                         self.workers_info_state[sel].fields_states[FieldName::WordlistPath.index()]
+                            .get(),
+                    )
+                    .proxy_url(
+                        self.workers_info_state[sel].fields_states[FieldName::ProxyUrl.index()]
                             .get(),
                     );
 
