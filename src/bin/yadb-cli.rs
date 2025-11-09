@@ -5,7 +5,6 @@ use std::{
 };
 
 use clap::Parser;
-use color_eyre::owo_colors::OwoColorize;
 use console::style;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use yadb::lib::{
@@ -70,7 +69,7 @@ fn main() {
     println!("Wordlist path: {}", style(args.wordlist.to_string()).cyan());
     println!("Target: {}", style(args.target_url.to_string()).cyan());
     if let Some(proxy_url) = args.proxy_url.as_ref() {
-        println!("Proxy: {}\n", style(proxy_url.to_string().cyan()))
+        println!("Proxy: {}\n", style(proxy_url.to_string()).cyan())
     }
 
     if let Some(output) = args.output.as_ref() {
