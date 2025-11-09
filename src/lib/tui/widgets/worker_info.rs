@@ -327,18 +327,17 @@ impl StatefulWidget for WorkerInfo {
                     .render(layout[4], buf);
             }
             WorkerVariant::Builder => {
+
+                let constraints: [Constraint; FIELDS_NUMBER + 1] = std::array::from_fn(|i| {
+                    if i == FieldName::WordlistPath.index() && state.fields_states[i].is_editing {
+                        return Constraint::Length(7);
+                    }
+                    return Constraint::Length(3);
+                });
+
                 let layout: [Rect; FIELDS_NUMBER + 1] = Layout::new(
                     layout::Direction::Vertical,
-                    [
-                        Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Max(3),
-                        Constraint::Max(3), 
-                        Constraint::Max(7), 
-                        Constraint::Max(5), // FOR BUTTON
-                    ],
+                    constraints
                 )
                 .areas(area);
 
@@ -353,7 +352,7 @@ impl StatefulWidget for WorkerInfo {
                     )
                     .alignment(layout::Alignment::Center)
                     .render(
-                        Self::center(layout[6], Constraint::Max(40), Constraint::Length(3)),
+                        Self::center(layout[FIELDS_NUMBER], Constraint::Max(40), Constraint::Length(3)),
                         buf,
                     );
 
