@@ -127,7 +127,7 @@ impl WorkerBuilder {
         self
     }
 
-    pub fn proxy_uri(mut self, proxy_uri:  &str) -> Self {
+    pub fn proxy_url(mut self, proxy_uri:  &str) -> Self {
         if self.error.is_some() || proxy_uri.is_empty() {
             return self;
         }
