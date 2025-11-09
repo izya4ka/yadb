@@ -46,7 +46,7 @@ impl FieldName {
             FieldName::Recursion => 3,
             FieldName::Timeout => 4,
             FieldName::WordlistPath => 5,
-            FieldName::ProxyUrl => 6
+            FieldName::ProxyUrl => 6,
         }
     }
 
@@ -70,7 +70,7 @@ impl FieldName {
             FieldName::Recursion => FieldName::Threads,
             FieldName::Timeout => FieldName::Recursion,
             FieldName::WordlistPath => FieldName::Timeout,
-            FieldName::ProxyUrl => FieldName::WordlistPath
+            FieldName::ProxyUrl => FieldName::WordlistPath,
         }
     }
 
@@ -92,7 +92,7 @@ const NAMES: [&str; FIELDS_NUMBER] = [
     " Recursion depth ",
     " Max timeout ",
     " Wordlist path ",
-    " Proxy URL "
+    " Proxy URL ",
 ];
 
 #[derive(Debug, PartialEq)]
@@ -192,9 +192,7 @@ impl Default for WorkerState {
                     false,
                     FieldType::Path(PathHintState::default()),
                 ),
-                FieldState::new(
-                    "",
-                     false, false, FieldType::Normal)
+                FieldState::new("", false, false, FieldType::Normal),
             ],
         }
     }
@@ -327,19 +325,15 @@ impl StatefulWidget for WorkerInfo {
                     .render(layout[4], buf);
             }
             WorkerVariant::Builder => {
-
                 let constraints: [Constraint; FIELDS_NUMBER + 1] = std::array::from_fn(|i| {
                     if i == FieldName::WordlistPath.index() && state.fields_states[i].is_editing {
                         return Constraint::Length(7);
                     }
-                    return Constraint::Length(3);
+                    Constraint::Length(3)
                 });
 
-                let layout: [Rect; FIELDS_NUMBER + 1] = Layout::new(
-                    layout::Direction::Vertical,
-                    constraints
-                )
-                .areas(area);
+                let layout: [Rect; FIELDS_NUMBER + 1] =
+                    Layout::new(layout::Direction::Vertical, constraints).areas(area);
 
                 Paragraph::new("Run")
                     .centered()
@@ -352,7 +346,11 @@ impl StatefulWidget for WorkerInfo {
                     )
                     .alignment(layout::Alignment::Center)
                     .render(
-                        Self::center(layout[FIELDS_NUMBER], Constraint::Max(40), Constraint::Length(3)),
+                        Self::center(
+                            layout[FIELDS_NUMBER],
+                            Constraint::Max(40),
+                            Constraint::Length(3),
+                        ),
                         buf,
                     );
 

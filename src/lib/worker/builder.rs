@@ -50,7 +50,6 @@ pub struct WorkerBuilder {
 }
 
 impl WorkerBuilder {
-
     pub fn threads(mut self, threads: usize) -> Self {
         if self.error.is_some() {
             return self;
@@ -127,7 +126,7 @@ impl WorkerBuilder {
         self
     }
 
-    pub fn proxy_url(mut self, proxy_uri:  &str) -> Self {
+    pub fn proxy_url(mut self, proxy_uri: &str) -> Self {
         if self.error.is_some() || proxy_uri.is_empty() {
             return self;
         }
@@ -171,7 +170,7 @@ impl WorkerBuilder {
             wordlist,
             uri,
             message_sender,
-            proxy_uri
+            proxy_uri,
         ))
     }
 }

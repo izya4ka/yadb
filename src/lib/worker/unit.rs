@@ -37,7 +37,7 @@ impl Worker {
         wordlist: PathBuf,
         uri: Url,
         message_sender: Arc<Sender<WorkerMessage>>,
-        proxy_uri: Option<Url>
+        proxy_uri: Option<Url>,
     ) -> Worker {
         Worker {
             threads,
@@ -46,7 +46,7 @@ impl Worker {
             message_sender,
             uri,
             timeout,
-            proxy_url: proxy_uri
+            proxy_url: proxy_uri,
         }
     }
 
@@ -96,7 +96,7 @@ impl Worker {
 
         let mut result: Vec<Url> = Vec::new();
 
-        let mut agent= Agent::config_builder()
+        let mut agent = Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(self.timeout.try_into().unwrap())))
             .http_status_as_error(false);
 
