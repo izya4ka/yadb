@@ -18,7 +18,7 @@ use crate::lib::{
     worker::builder::{DEFAULT_RECURSIVE_MODE, DEFAULT_THREADS_NUMBER, DEFAULT_TIMEOUT},
 };
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum WorkerVariant {
     Worker(bool),
     #[default]

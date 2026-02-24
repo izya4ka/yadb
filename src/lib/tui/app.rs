@@ -333,6 +333,7 @@ impl App {
     fn handle_worker_info_keys(&mut self, key: KeyEvent) {
         if let Some(sel) = self.worker_list_state.selected() {
             let worker_state = &mut self.workers_info_state[sel];
+
             match (key.modifiers, key.code) {
                 (_, KeyCode::Char('h')) => {
                     self.show_help_popup = !self.show_help_popup;
@@ -345,6 +346,10 @@ impl App {
                         self.close_all_popups();
                         return;
                     };
+
+                    if worker_state.worker == WorkerVariant::Worker(true) {
+                        return;
+                    }
 
                     match worker_state.selection {
                         Selection::Field(field) => {
